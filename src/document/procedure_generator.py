@@ -1,0 +1,1081 @@
+
+"""Generate a professional procedure DOCX from a DocumentBundle."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from docx import Document
+from docx.document import Document as DocxDocument
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Cm, Pt
+from docx.table import Table, _Cell
+from docx.text.paragraph import Paragraph
+
+from .models import (
+    DocumentBundle,
+    DocumentOperation,
+    DocumentOperationKind,
+)
+
+
+class ProcedureGenerationError(RuntimeError):
+    """Raised when the procedure document cannot be generated."""
+
+
+class ProcedureDocumentGenerator:
+    """Populate the company procedure template from a DocumentBundle."""
+
+    def generate(
+        self,
+        bundle: DocumentBundle,
+        template_path: str | Path,
+        output_path: str | Path,
+    ) -> Path:
+        """Generate the procedure document."""
+
+        source_path = Path(template_path)
+        destination_path = Path(output_path)
+
+        if not source_path.exists():
+            raise FileNotFoundError(
+                f"Procedure template not found: {source_path}"
+            )
+
+        destination_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        document = Document(source_path)
+
+        self._replace_template_text(
+            document=document,
+            bundle=bundle,
+        )
+
+        operations_table = self._find_operations_table(
+            document
+        )
+
+        self._populate_operations_table(
+            table=operations_table,
+            operations=bundle.operations,
+        )
+
+        internal_controls_table = (
+            self._find_internal_controls_table(
+                document
+            )
+        )
+
+        self._populate_internal_controls_table(
+            table=internal_controls_table,
+            bundle=bundle,
+        )
+
+        business_rules_table = (
+            self._find_business_rules_table(
+                document
+            )
+        )
+
+        print(
+            "Business rules found:",
+            len(bundle.procedure.business_rules),
+        )
+
+        self._populate_business_rules_table(
+            table=business_rules_table,
+            bundle=bundle,
+        )
+
+        if bundle.documents:
+            documents_table = (
+                self._find_table_after_heading(
+                    document=document,
+                    heading_text=(
+                        "C. Documents / Etats utilisés"
+                    ),
+                )
+            )
+
+            if documents_table is not None:
+                self._populate_documents_table(
+                    table=documents_table,
+                    bundle=bundle,
+                )
+
+        document.save(destination_path)
+
+        return destination_path
+
+    def _replace_template_text(
+        self,
+        document: DocxDocument,
+        bundle: DocumentBundle,
+    ) -> None:
+        """Replace known text placeholders throughout the document."""
+
+        replacements = {
+            "Traitement des demandes d’achat": bundle.metadata.title,
+            "Cette procédure décrit la démarche à suivre pour la gestion "
+            "des demandes d’achat.": (
+                bundle.procedure.purpose
+                or (
+                    "Cette procédure décrit les opérations du processus "
+                    f"« {bundle.metadata.title} »."
+                )
+            ),
+        }
+
+        if bundle.metadata.domain:
+            replacements["Gestion des achats"] = (
+                bundle.metadata.domain
+            )
+
+        if bundle.metadata.reference:
+            replacements["CNI-ACH-003"] = (
+                bundle.metadata.reference
+            )
+
+        if bundle.metadata.creation_date:
+            replacements["01/09/2022"] = (
+                bundle.metadata.creation_date
+            )
+
+        for paragraph in self._iter_all_paragraphs(
+            document
+        ):
+            self._replace_text_in_paragraph(
+                paragraph=paragraph,
+                replacements=replacements,
+            )
+
+    @classmethod
+    def _find_operations_table(
+        cls,
+        document: DocxDocument,
+    ) -> Table:
+        """Find the operations table from its column headers."""
+
+        for table in document.tables:
+            if not table.rows:
+                continue
+
+            headers = [
+                cls._normalize_text(cell.text)
+                for cell in table.rows[0].cells
+            ]
+
+            if len(headers) < 4:
+                continue
+
+            is_operations_table = (
+                headers[0] == "intervenant"
+                and headers[1] in {
+                    "n° op",
+                    "nº op",
+                    "no op",
+                }
+                and "description de l'opération" in headers[2]
+                and headers[3] == "document"
+            )
+
+            if is_operations_table:
+                return table
+
+        detected_headers = [
+            [
+                cls._normalize_text(cell.text)
+                for cell in table.rows[0].cells
+            ]
+            for table in document.tables
+            if table.rows
+        ]
+
+        raise ProcedureGenerationError(
+            "Could not find the operations table. "
+            f"Detected table headers: {detected_headers}"
+        )
+
+    @classmethod
+    def _find_business_rules_table(
+        cls,
+        document: DocxDocument,
+    ) -> Table:
+        """Find the business-rules table from its column headers."""
+
+        for table in document.tables:
+            if not table.rows:
+                continue
+
+            headers = [
+                cls._normalize_text(cell.text)
+                for cell in table.rows[0].cells
+            ]
+
+            if len(headers) < 2:
+                continue
+
+            first_header = headers[0]
+            second_header = headers[1]
+
+            is_business_rules_table = (
+                first_header in {
+                    "réf. op",
+                    "ref. op",
+                    "réf op",
+                    "ref op",
+                }
+                and "règle de gestion" in second_header
+            )
+
+            if is_business_rules_table:
+                return table
+
+        detected_headers = [
+            [
+                cls._normalize_text(cell.text)
+                for cell in table.rows[0].cells
+            ]
+            for table in document.tables
+            if table.rows
+        ]
+
+        raise ProcedureGenerationError(
+            "Could not find the business-rules table. "
+            f"Detected table headers: {detected_headers}"
+        )
+
+    @classmethod
+    def _find_internal_controls_table(
+        cls,
+        document: DocxDocument,
+    ) -> Table:
+        """Find the internal-controls table from its headers."""
+
+        for table in document.tables:
+            if not table.rows:
+                continue
+
+            headers = [
+                cls._normalize_text(cell.text)
+                for cell in table.rows[0].cells
+            ]
+
+            if len(headers) < 6:
+                continue
+
+            is_internal_controls_table = (
+                headers[0] in {
+                    "réf. op",
+                    "ref. op",
+                    "réf op",
+                    "ref op",
+                }
+                and "point de contrôle" in headers[1]
+                and "description du contrôle" in headers[2]
+                and "objectif du contrôle" in headers[3]
+                and "support du contrôle" in headers[4]
+                and headers[5] == "responsable"
+            )
+
+            if is_internal_controls_table:
+                return table
+
+        detected_headers = [
+            [
+                cls._normalize_text(cell.text)
+                for cell in table.rows[0].cells
+            ]
+            for table in document.tables
+            if table.rows
+        ]
+
+        raise ProcedureGenerationError(
+            "Could not find the internal-controls table. "
+            f"Detected table headers: {detected_headers}"
+        )
+
+    @classmethod
+    def _populate_operations_table(
+        cls,
+        table: Table,
+        operations: list[DocumentOperation],
+    ) -> None:
+        """
+        Clear template operation rows and insert one professional row
+        per operation.
+        """
+
+        while len(table.rows) > 1:
+            row = table.rows[-1]
+            table._tbl.remove(row._tr)
+
+        cls._set_operations_table_widths(
+            table
+        )
+
+        cls._repeat_table_header(
+            table.rows[0]
+        )
+
+        branch_condition_by_target_id = {
+            branch.target_operation_id: (
+                branch.gateway_name or "Décision",
+                (
+                    branch.label
+                    or branch.condition
+                    or "Branche non libellée"
+                ),
+            )
+            for operation in operations
+            for branch in operation.branches
+        }
+
+        for operation in operations:
+            row = table.add_row()
+
+            cls._prevent_row_split(
+                row
+            )
+
+            actor_text = (
+                operation.actor_name
+                or ""
+            )
+
+            document_names = list(
+                dict.fromkeys(
+                    [
+                        *operation.input_document_names,
+                        *operation.output_document_names,
+                    ]
+                )
+            )
+
+            cls._set_cell_text(
+                cell=row.cells[0],
+                text=actor_text,
+                alignment=WD_ALIGN_PARAGRAPH.LEFT,
+            )
+
+            cls._set_cell_text(
+                cell=row.cells[1],
+                text=str(operation.number),
+                alignment=WD_ALIGN_PARAGRAPH.CENTER,
+            )
+
+            if (
+                operation.element_kind
+                == DocumentOperationKind.SUBPROCESS
+            ):
+                merged = row.cells[2].merge(
+                    row.cells[3]
+                )
+
+                cls._render_operation_cell(
+                    cell=merged,
+                    operation=operation,
+                    branch_condition=(
+                        branch_condition_by_target_id.get(
+                            operation.bpmn_element_id
+                        )
+                    ),
+                )
+            else:
+                cls._render_operation_cell(
+                    cell=row.cells[2],
+                    operation=operation,
+                    branch_condition=(
+                        branch_condition_by_target_id.get(
+                            operation.bpmn_element_id
+                        )
+                    ),
+                )
+
+                cls._render_documents_cell(
+                    cell=row.cells[3],
+                    document_names=document_names,
+                )
+
+            row.cells[0].vertical_alignment = (
+                WD_CELL_VERTICAL_ALIGNMENT.TOP
+            )
+            row.cells[1].vertical_alignment = (
+                WD_CELL_VERTICAL_ALIGNMENT.CENTER
+            )
+            row.cells[2].vertical_alignment = (
+                WD_CELL_VERTICAL_ALIGNMENT.TOP
+            )
+            row.cells[3].vertical_alignment = (
+                WD_CELL_VERTICAL_ALIGNMENT.TOP
+            )
+
+    @classmethod
+    def _render_operation_cell(
+        cls,
+        cell: _Cell,
+        operation: DocumentOperation,
+        branch_condition: tuple[str, str] | None = None,
+    ) -> None:
+        """Render description, notes and branches with separate styles."""
+
+        cls._clear_cell(cell)
+
+        description_paragraph = cell.paragraphs[0]
+
+        if branch_condition is not None:
+            gateway_name, branch_label = branch_condition
+
+            cls._configure_paragraph(
+                description_paragraph,
+                alignment=WD_ALIGN_PARAGRAPH.LEFT,
+                space_after=Pt(3),
+            )
+
+            cls._add_run(
+                paragraph=description_paragraph,
+                text=f"{gateway_name} — {branch_label}",
+            )
+
+            description_paragraph = cell.add_paragraph()
+
+        cls._configure_paragraph(
+            description_paragraph,
+            alignment=WD_ALIGN_PARAGRAPH.LEFT,
+            space_after=Pt(4),
+        )
+
+        cls._add_run(
+            paragraph=description_paragraph,
+            text=operation.description.strip(),
+        )
+
+        non_incorporated_notes = [
+            note.text.strip()
+            for note in operation.notes
+            if (
+                note.text.strip()
+                and not note.incorporated_in_description
+            )
+        ]
+
+        for note_text in non_incorporated_notes:
+            note_paragraph = cell.add_paragraph()
+
+            cls._configure_paragraph(
+                note_paragraph,
+                alignment=WD_ALIGN_PARAGRAPH.LEFT,
+                space_before=Pt(3),
+                space_after=Pt(2),
+            )
+
+            cls._add_run(
+                paragraph=note_paragraph,
+                text="Remarque : ",
+                bold=True,
+                italic=True,
+            )
+
+            cls._add_run(
+                paragraph=note_paragraph,
+                text=note_text,
+                italic=True,
+            )
+
+        if operation.branches:
+            cls._render_decision_question_only(
+                cell=cell,
+                operation=operation,
+            )
+
+    @classmethod
+    def _render_decision_question_only(
+        cls,
+        cell: _Cell,
+        operation: DocumentOperation,
+    ) -> None:
+        """Render only the BPMN gateway question for a decision."""
+
+        gateway_name = next(
+            (
+                branch.gateway_name
+                for branch in operation.branches
+                if branch.gateway_name
+            ),
+            "Décision",
+        )
+
+        title_paragraph = cell.add_paragraph()
+
+        cls._configure_paragraph(
+            title_paragraph,
+            alignment=WD_ALIGN_PARAGRAPH.LEFT,
+            space_before=Pt(6),
+            space_after=Pt(1),
+        )
+
+        cls._add_run(
+            paragraph=title_paragraph,
+            text="Décision",
+            bold=True,
+        )
+
+        question_paragraph = cell.add_paragraph()
+
+        cls._configure_paragraph(
+            question_paragraph,
+            alignment=WD_ALIGN_PARAGRAPH.LEFT,
+            space_after=Pt(4),
+        )
+
+        cls._add_run(
+            paragraph=question_paragraph,
+            text=gateway_name,
+            bold=True,
+            italic=True,
+        )
+
+    @staticmethod
+    def _find_table_after_heading(
+        document: DocxDocument,
+        heading_text: str,
+    ) -> Table | None:
+        """
+        Find the first table appearing after a matching paragraph.
+
+        This uses the XML order because document.tables alone does not expose
+        surrounding paragraph relationships.
+        """
+
+        body_elements = list(
+            document.element.body.iterchildren()
+        )
+
+        heading_found = False
+
+        for element in body_elements:
+            tag_name = element.tag.rsplit("}", 1)[-1]
+
+            if tag_name == "p":
+                paragraph = Paragraph(
+                    element,
+                    document,
+                )
+
+                if (
+                    heading_text.lower()
+                    in paragraph.text.strip().lower()
+                ):
+                    heading_found = True
+
+            elif tag_name == "tbl" and heading_found:
+                return Table(
+                    element,
+                    document,
+                )
+
+        return None
+
+    @staticmethod
+    def _populate_documents_table(
+        table: Table,
+        bundle: DocumentBundle,
+    ) -> None:
+        """Populate the documents/states table when one exists."""
+
+        if not table.rows:
+            return
+
+        while len(table.rows) > 1:
+            row = table.rows[-1]
+            table._tbl.remove(row._tr)
+
+        if not bundle.documents:
+            row = table.add_row()
+
+            for cell in row.cells:
+                ProcedureDocumentGenerator._set_cell_text(
+                    cell=cell,
+                    text="N/A",
+                )
+
+            return
+
+        for document_item in bundle.documents:
+            row = table.add_row()
+
+            operation_numbers = [
+                str(operation.number)
+                for operation in bundle.operations
+                if (
+                    operation.bpmn_element_id
+                    in {
+                        *document_item.produced_by_operation_ids,
+                        *document_item.consumed_by_operation_ids,
+                    }
+                )
+            ]
+
+            values = [
+                ", ".join(operation_numbers),
+                document_item.name,
+            ]
+
+            for index, cell in enumerate(row.cells):
+                value = (
+                    values[index]
+                    if index < len(values)
+                    else ""
+                )
+
+                ProcedureDocumentGenerator._set_cell_text(
+                    cell=cell,
+                    text=value,
+                )
+
+    @classmethod
+    def _populate_internal_controls_table(
+        cls,
+        table: Table,
+        bundle: DocumentBundle,
+    ) -> None:
+        """Populate Section D or clear template examples."""
+
+        if not table.rows:
+            raise ProcedureGenerationError(
+                "The internal-controls table has no header row."
+            )
+
+        while len(table.rows) > 1:
+            row = table.rows[-1]
+            table._tbl.remove(row._tr)
+
+        controls = bundle.procedure.internal_controls
+
+        if not controls:
+            empty_row = table.add_row()
+
+            for cell in empty_row.cells:
+                cls._set_cell_text(
+                    cell=cell,
+                    text="",
+                )
+
+            return
+
+        for control in controls:
+            row = table.add_row()
+
+            cls._prevent_row_split(row)
+
+            values = [
+                str(
+                    control.get(
+                        "operation_number",
+                        "",
+                    )
+                ),
+                control.get(
+                    "control_point",
+                    "",
+                ),
+                control.get(
+                    "description",
+                    "",
+                ),
+                control.get(
+                    "objective",
+                    "",
+                ),
+                control.get(
+                    "support",
+                    "",
+                ),
+                control.get(
+                    "responsible",
+                    "",
+                ),
+            ]
+
+            for index, cell in enumerate(
+                row.cells
+            ):
+                cls._set_cell_text(
+                    cell=cell,
+                    text=(
+                        values[index]
+                        if index < len(values)
+                        else ""
+                    ),
+                    alignment=(
+                        WD_ALIGN_PARAGRAPH.CENTER
+                        if index == 0
+                        else WD_ALIGN_PARAGRAPH.LEFT
+                    ),
+                )
+
+                cell.vertical_alignment = (
+                    WD_CELL_VERTICAL_ALIGNMENT.TOP
+                )
+
+    @classmethod
+    def _populate_business_rules_table(
+        cls,
+        table: Table,
+        bundle: DocumentBundle,
+    ) -> None:
+        """Populate Section E from BPMN annotations."""
+
+        if not table.rows:
+            raise ProcedureGenerationError(
+                "The business-rules table has no header row."
+            )
+
+        # Remove all template/example rows.
+        while len(table.rows) > 1:
+            row = table.rows[-1]
+            table._tbl.remove(row._tr)
+
+        rules = bundle.procedure.business_rules
+
+        if not rules:
+            row = table.add_row()
+
+            cls._set_cell_text(
+                cell=row.cells[0],
+                text="",
+                alignment=WD_ALIGN_PARAGRAPH.CENTER,
+            )
+
+            cls._set_cell_text(
+                cell=row.cells[1],
+                text="Aucune règle de gestion identifiée.",
+                alignment=WD_ALIGN_PARAGRAPH.LEFT,
+            )
+
+            return
+
+        for rule in rules:
+            row = table.add_row()
+
+            cls._prevent_row_split(row)
+
+            cls._set_cell_text(
+                cell=row.cells[0],
+                text=str(rule.operation_number),
+                alignment=WD_ALIGN_PARAGRAPH.CENTER,
+            )
+
+            cls._set_cell_text(
+                cell=row.cells[1],
+                text=rule.text.strip(),
+                alignment=WD_ALIGN_PARAGRAPH.LEFT,
+            )
+
+            row.cells[0].vertical_alignment = (
+                WD_CELL_VERTICAL_ALIGNMENT.CENTER
+            )
+
+            row.cells[1].vertical_alignment = (
+                WD_CELL_VERTICAL_ALIGNMENT.TOP
+            )
+
+    @classmethod
+    def _render_documents_cell(
+        cls,
+        cell: _Cell,
+        document_names: list[str],
+    ) -> None:
+        """Render associated documents, one per paragraph."""
+
+        cls._clear_cell(
+            cell
+        )
+
+        if not document_names:
+            return
+
+        for index, document_name in enumerate(
+            document_names
+        ):
+            paragraph = (
+                cell.paragraphs[0]
+                if index == 0
+                else cell.add_paragraph()
+            )
+
+            cls._configure_paragraph(
+                paragraph,
+                alignment=WD_ALIGN_PARAGRAPH.LEFT,
+                space_after=Pt(2),
+            )
+
+            cls._add_run(
+                paragraph=paragraph,
+                text=document_name,
+            )
+
+    @classmethod
+    def _set_cell_text(
+        cls,
+        cell: _Cell,
+        text: str,
+        alignment: WD_ALIGN_PARAGRAPH = (
+            WD_ALIGN_PARAGRAPH.LEFT
+        ),
+    ) -> None:
+        """Set plain cell text with consistent formatting."""
+
+        cls._clear_cell(
+            cell
+        )
+
+        lines = text.splitlines() or [""]
+
+        for index, line in enumerate(lines):
+            paragraph = (
+                cell.paragraphs[0]
+                if index == 0
+                else cell.add_paragraph()
+            )
+
+            cls._configure_paragraph(
+                paragraph,
+                alignment=alignment,
+                space_after=Pt(0),
+            )
+
+            cls._add_run(
+                paragraph=paragraph,
+                text=line,
+            )
+
+    @staticmethod
+    def _clear_cell(
+        cell: _Cell,
+    ) -> None:
+        """Remove text while preserving one usable paragraph."""
+
+        cell.text = ""
+
+        paragraph = cell.paragraphs[0]
+
+        for run in paragraph.runs:
+            run.text = ""
+
+    @staticmethod
+    def _configure_paragraph(
+        paragraph: Paragraph,
+        *,
+        alignment: WD_ALIGN_PARAGRAPH,
+        space_before: Pt = Pt(0),
+        space_after: Pt = Pt(0),
+        left_indent: Cm | None = None,
+    ) -> None:
+        paragraph.alignment = alignment
+
+        paragraph.paragraph_format.space_before = (
+            space_before
+        )
+        paragraph.paragraph_format.space_after = (
+            space_after
+        )
+        paragraph.paragraph_format.line_spacing = 1.05
+
+        if left_indent is not None:
+            paragraph.paragraph_format.left_indent = (
+                left_indent
+            )
+
+    @staticmethod
+    def _add_run(
+        paragraph: Paragraph,
+        text: str,
+        *,
+        bold: bool = False,
+        italic: bool = False,
+    ) -> None:
+        run = paragraph.add_run(
+            text
+        )
+
+        run.font.name = "Arial"
+        run.font.size = Pt(9)
+        run.bold = bold
+        run.italic = italic
+
+    @staticmethod
+    def _lowercase_first_letter(
+        value: str,
+    ) -> str:
+        value = value.strip()
+
+        if not value:
+            return value
+
+        return value[0].lower() + value[1:]
+
+    @staticmethod
+    def _set_operations_table_widths(
+        table: Table,
+    ) -> None:
+        """Set balanced widths for the four operation columns."""
+
+        widths = [
+            Cm(4.0),
+            Cm(1.4),
+            Cm(9.8),
+            Cm(3.2),
+        ]
+
+        table.autofit = False
+
+        for row in table.rows:
+            for cell, width in zip(
+                row.cells,
+                widths,
+                strict=False,
+            ):
+                cell.width = width
+
+    @staticmethod
+    def _repeat_table_header(
+        row,
+    ) -> None:
+        table_row_properties = (
+            row._tr.get_or_add_trPr()
+        )
+
+        repeat_header = OxmlElement(
+            "w:tblHeader"
+        )
+
+        repeat_header.set(
+            qn("w:val"),
+            "true",
+        )
+
+        table_row_properties.append(
+            repeat_header
+        )
+
+    @staticmethod
+    def _prevent_row_split(
+        row,
+    ) -> None:
+        row_properties = (
+            row._tr.get_or_add_trPr()
+        )
+
+        cannot_split = OxmlElement(
+            "w:cantSplit"
+        )
+
+        row_properties.append(
+            cannot_split
+        )
+
+    @staticmethod
+    def _replace_text_in_paragraph(
+        paragraph: Paragraph,
+        replacements: dict[str, str],
+    ) -> None:
+        """
+        Replace text while preserving the formatting of the first run.
+
+        This is suitable for simple template labels and titles.
+        """
+
+        original_text = paragraph.text
+
+        updated_text = original_text
+
+        for source, destination in replacements.items():
+            updated_text = updated_text.replace(
+                source,
+                destination,
+            )
+
+        if updated_text == original_text:
+            return
+
+        if not paragraph.runs:
+            paragraph.add_run(updated_text)
+            return
+
+        first_run = paragraph.runs[0]
+
+        for run in paragraph.runs:
+            run.text = ""
+
+        first_run.text = updated_text
+
+    @classmethod
+    def _iter_all_paragraphs(
+        cls,
+        document: DocxDocument,
+    ):
+        """Yield paragraphs from body, tables, headers and footers."""
+
+        for paragraph in document.paragraphs:
+            yield paragraph
+
+        for table in document.tables:
+            yield from cls._iter_table_paragraphs(
+                table
+            )
+
+        for section in document.sections:
+            for paragraph in section.header.paragraphs:
+                yield paragraph
+
+            for table in section.header.tables:
+                yield from cls._iter_table_paragraphs(
+                    table
+                )
+
+            for paragraph in section.footer.paragraphs:
+                yield paragraph
+
+            for table in section.footer.tables:
+                yield from cls._iter_table_paragraphs(
+                    table
+                )
+
+    @classmethod
+    def _iter_table_paragraphs(
+        cls,
+        table: Table,
+    ):
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    yield paragraph
+
+                for nested_table in cell.tables:
+                    yield from cls._iter_table_paragraphs(
+                        nested_table
+                    )
+
+    @staticmethod
+    def _normalize_text(
+        value: str,
+    ) -> str:
+        normalized = (
+            value
+            .replace("\xa0", " ")
+            .replace("\u2019", "'")
+            .replace("\u2018", "'")
+            .replace("\u201B", "'")
+            .replace("\u2032", "'")
+            .strip()
+            .lower()
+        )
+
+        return " ".join(normalized.split())

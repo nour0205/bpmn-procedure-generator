@@ -1,0 +1,55 @@
+﻿# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+kaggle.json
+secrets.json
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Jupyter and Kaggle
+.ipynb_checkpoints/
+narrative_cache/
+kaggle/working/
+
+# Hugging Face and model files
+.cache/
+huggingface/
+*.safetensors
+*.bin
+*.gguf
+*.pt
+*.pth
+
+# Temporary Office files
+~$*.docx
+~$*.xlsx
+~$*.pptx
+
+# Generated runtime files
+output/
+logs/
+tmp/
+temp/
+
+# Python packaging
+build/
+dist/
+*.egg-info/
