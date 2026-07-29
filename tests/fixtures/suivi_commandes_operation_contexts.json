@@ -1,0 +1,428 @@
+{
+  "process_id": "Id_14e4a3e9-61cb-46d3-8ab0-3058189f16da",
+  "title": "Id_14e4a3e9-61cb-46d3-8ab0-3058189f16da",
+  "operation_count": 11,
+  "contexts": [
+    {
+      "operation_number": 1,
+      "bpmn_element_id": "Id_58b1320f-ddda-407f-bc96-fbc3dc30c7d0",
+      "raw_name": "Lancement des commandes",
+      "actor_name": "Direction d'Approvisionnement",
+      "element_kind": "subprocess",
+      "source_type": "callActivity",
+      "previous_operations": [],
+      "next_operations": [
+        {
+          "id": "Id_27616c1f-28f6-488a-b1f8-0cb2118bc19d",
+          "name": "J+X",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "business_event"
+        },
+        {
+          "id": "Id_cb31e508-73e6-4f40-a87d-63a9772d98fc",
+          "name": "Génération d'un reporting des commandes en cours",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "operation"
+        }
+      ],
+      "input_documents": [],
+      "output_documents": [],
+      "notes": [],
+      "branches": [
+        {
+          "gateway_id": "Id_afec6a7d-eebe-46f9-b848-c7c0a305363f",
+          "gateway_name": "Alerte par rapport à la date de réception des pdts locaux/date d’embarquement pour les pdts importés",
+          "label": "Oui",
+          "is_default": false,
+          "target_element_id": "Id_27616c1f-28f6-488a-b1f8-0cb2118bc19d",
+          "target_name": "J+X"
+        },
+        {
+          "gateway_id": "Id_afec6a7d-eebe-46f9-b848-c7c0a305363f",
+          "gateway_name": "Alerte par rapport à la date de réception des pdts locaux/date d’embarquement pour les pdts importés",
+          "label": "Non",
+          "is_default": false,
+          "target_element_id": "Id_cb31e508-73e6-4f40-a87d-63a9772d98fc",
+          "target_name": "Génération d'un reporting des commandes en cours"
+        }
+      ],
+      "order_ambiguous": false,
+      "validation_issue_codes": [
+        "PROCESS_WITHOUT_END_EVENT",
+        "PROCESS_WITHOUT_START_EVENT"
+      ]
+    },
+    {
+      "operation_number": 2,
+      "bpmn_element_id": "Id_27616c1f-28f6-488a-b1f8-0cb2118bc19d",
+      "raw_name": "J+X",
+      "actor_name": "Direction d'Approvisionnement",
+      "element_kind": "business_event",
+      "source_type": "intermediateCatchEvent",
+      "previous_operations": [
+        {
+          "id": "Id_58b1320f-ddda-407f-bc96-fbc3dc30c7d0",
+          "name": "Lancement des commandes",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "subprocess"
+        }
+      ],
+      "next_operations": [
+        {
+          "id": "Id_98828c6c-2aaa-4017-8d07-60d1365b92c5",
+          "name": "Relancer le Fournisseur sur le portail et par téléphone",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "operation"
+        }
+      ],
+      "input_documents": [],
+      "output_documents": [],
+      "notes": [],
+      "branches": [],
+      "order_ambiguous": false,
+      "validation_issue_codes": [
+        "PROCESS_WITHOUT_END_EVENT",
+        "PROCESS_WITHOUT_START_EVENT"
+      ]
+    },
+    {
+      "operation_number": 3,
+      "bpmn_element_id": "Id_cb31e508-73e6-4f40-a87d-63a9772d98fc",
+      "raw_name": "Génération d'un reporting des commandes en cours",
+      "actor_name": "Direction d'Approvisionnement",
+      "element_kind": "operation",
+      "source_type": "serviceTask",
+      "previous_operations": [
+        {
+          "id": "Id_58b1320f-ddda-407f-bc96-fbc3dc30c7d0",
+          "name": "Lancement des commandes",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "subprocess"
+        }
+      ],
+      "next_operations": [
+        {
+          "id": "Id_bd4c5750-70f3-4c43-932f-c3f6c5dd5464",
+          "name": "Gestion des réceptions",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "subprocess"
+        }
+      ],
+      "input_documents": [],
+      "output_documents": [],
+      "notes": [
+        {
+          "id": "Id_411f66aa-6028-4ec0-ac51-bbb6b5d0818e",
+          "text": "Il est possible de filtrer les commandes par date, produit, etc."
+        },
+        {
+          "id": "Id_a0371300-e98f-4741-90fd-5e848a644e16",
+          "text": "Avec une possibilité de consulter le reliquat de livraison, le statut, etc."
+        }
+      ],
+      "branches": [],
+      "order_ambiguous": false,
+      "validation_issue_codes": [
+        "PROCESS_WITHOUT_END_EVENT",
+        "PROCESS_WITHOUT_START_EVENT"
+      ]
+    },
+    {
+      "operation_number": 4,
+      "bpmn_element_id": "Id_98828c6c-2aaa-4017-8d07-60d1365b92c5",
+      "raw_name": "Relancer le Fournisseur sur le portail et par téléphone",
+      "actor_name": "Direction d'Approvisionnement",
+      "element_kind": "operation",
+      "source_type": "userTask",
+      "previous_operations": [
+        {
+          "id": "Id_27616c1f-28f6-488a-b1f8-0cb2118bc19d",
+          "name": "J+X",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "business_event"
+        }
+      ],
+      "next_operations": [
+        {
+          "id": "Id_7951ae79-18ee-4981-bc6a-b8f64212af45",
+          "name": "J+Y sans réponse du Fournisseur",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "business_event"
+        }
+      ],
+      "input_documents": [],
+      "output_documents": [],
+      "notes": [],
+      "branches": [],
+      "order_ambiguous": false,
+      "validation_issue_codes": [
+        "PROCESS_WITHOUT_END_EVENT",
+        "PROCESS_WITHOUT_START_EVENT"
+      ]
+    },
+    {
+      "operation_number": 5,
+      "bpmn_element_id": "Id_bd4c5750-70f3-4c43-932f-c3f6c5dd5464",
+      "raw_name": "Gestion des réceptions",
+      "actor_name": "Direction d'Approvisionnement",
+      "element_kind": "subprocess",
+      "source_type": "callActivity",
+      "previous_operations": [
+        {
+          "id": "Id_cb31e508-73e6-4f40-a87d-63a9772d98fc",
+          "name": "Génération d'un reporting des commandes en cours",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "operation"
+        },
+        {
+          "id": "Id_f3637652-e8c9-46f5-bb0f-acb9272969cf",
+          "name": "Mettre à jour le planning de livraisons prévues",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "operation"
+        }
+      ],
+      "next_operations": [],
+      "input_documents": [],
+      "output_documents": [],
+      "notes": [],
+      "branches": [],
+      "order_ambiguous": true,
+      "validation_issue_codes": [
+        "PROCESS_WITHOUT_END_EVENT",
+        "PROCESS_WITHOUT_START_EVENT"
+      ]
+    },
+    {
+      "operation_number": 6,
+      "bpmn_element_id": "Id_7951ae79-18ee-4981-bc6a-b8f64212af45",
+      "raw_name": "J+Y sans réponse du Fournisseur",
+      "actor_name": "Direction d'Approvisionnement",
+      "element_kind": "business_event",
+      "source_type": "intermediateCatchEvent",
+      "previous_operations": [
+        {
+          "id": "Id_98828c6c-2aaa-4017-8d07-60d1365b92c5",
+          "name": "Relancer le Fournisseur sur le portail et par téléphone",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "operation"
+        }
+      ],
+      "next_operations": [
+        {
+          "id": "Id_a761d73c-82aa-42cf-bd99-bd23b1573a10",
+          "name": "Générer les lettres de relance",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "operation"
+        }
+      ],
+      "input_documents": [],
+      "output_documents": [],
+      "notes": [],
+      "branches": [],
+      "order_ambiguous": false,
+      "validation_issue_codes": [
+        "PROCESS_WITHOUT_END_EVENT",
+        "PROCESS_WITHOUT_START_EVENT"
+      ]
+    },
+    {
+      "operation_number": 7,
+      "bpmn_element_id": "Id_a761d73c-82aa-42cf-bd99-bd23b1573a10",
+      "raw_name": "Générer les lettres de relance",
+      "actor_name": "Direction d'Approvisionnement",
+      "element_kind": "operation",
+      "source_type": "userTask",
+      "previous_operations": [
+        {
+          "id": "Id_7951ae79-18ee-4981-bc6a-b8f64212af45",
+          "name": "J+Y sans réponse du Fournisseur",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "business_event"
+        },
+        {
+          "id": "Id_7707912d-3d8b-4b43-b170-13f088fbbe93",
+          "name": "Valider la lettre de relance",
+          "actor_name": "Direction Générale",
+          "element_kind": "operation"
+        }
+      ],
+      "next_operations": [
+        {
+          "id": "Id_7707912d-3d8b-4b43-b170-13f088fbbe93",
+          "name": "Valider la lettre de relance",
+          "actor_name": "Direction Générale",
+          "element_kind": "operation"
+        }
+      ],
+      "input_documents": [],
+      "output_documents": [],
+      "notes": [
+        {
+          "id": "Id_51c7cee9-a762-42c1-8092-1038ec70ef92",
+          "text": "Sur la base d'un modèle pré-définis intégrant des données statiques et dynamiques"
+        }
+      ],
+      "branches": [],
+      "order_ambiguous": true,
+      "validation_issue_codes": [
+        "PROCESS_WITHOUT_END_EVENT",
+        "PROCESS_WITHOUT_START_EVENT"
+      ]
+    },
+    {
+      "operation_number": 8,
+      "bpmn_element_id": "Id_7707912d-3d8b-4b43-b170-13f088fbbe93",
+      "raw_name": "Valider la lettre de relance",
+      "actor_name": "Direction Générale",
+      "element_kind": "operation",
+      "source_type": "userTask",
+      "previous_operations": [
+        {
+          "id": "Id_a761d73c-82aa-42cf-bd99-bd23b1573a10",
+          "name": "Générer les lettres de relance",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "operation"
+        }
+      ],
+      "next_operations": [
+        {
+          "id": "Id_9a6cc951-078e-4e91-9304-61cdc04b8219",
+          "name": "Transmettre la lettre de relance au Fournisseur via le portail et par mail",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "operation"
+        },
+        {
+          "id": "Id_a761d73c-82aa-42cf-bd99-bd23b1573a10",
+          "name": "Générer les lettres de relance",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "operation"
+        }
+      ],
+      "input_documents": [],
+      "output_documents": [],
+      "notes": [],
+      "branches": [
+        {
+          "gateway_id": "Id_7d79cf78-375c-4ff3-95d4-d67ed43a4ec4",
+          "gateway_name": "Validation ?",
+          "label": "oui",
+          "is_default": false,
+          "target_element_id": "Id_9a6cc951-078e-4e91-9304-61cdc04b8219",
+          "target_name": "Transmettre la lettre de relance au Fournisseur via le portail et par mail"
+        },
+        {
+          "gateway_id": "Id_7d79cf78-375c-4ff3-95d4-d67ed43a4ec4",
+          "gateway_name": "Validation ?",
+          "label": "Non",
+          "is_default": false,
+          "target_element_id": "Id_a761d73c-82aa-42cf-bd99-bd23b1573a10",
+          "target_name": "Générer les lettres de relance"
+        }
+      ],
+      "order_ambiguous": false,
+      "validation_issue_codes": [
+        "PROCESS_WITHOUT_END_EVENT",
+        "PROCESS_WITHOUT_START_EVENT"
+      ]
+    },
+    {
+      "operation_number": 9,
+      "bpmn_element_id": "Id_9a6cc951-078e-4e91-9304-61cdc04b8219",
+      "raw_name": "Transmettre la lettre de relance au Fournisseur via le portail et par mail",
+      "actor_name": "Direction d'Approvisionnement",
+      "element_kind": "operation",
+      "source_type": "userTask",
+      "previous_operations": [
+        {
+          "id": "Id_7707912d-3d8b-4b43-b170-13f088fbbe93",
+          "name": "Valider la lettre de relance",
+          "actor_name": "Direction Générale",
+          "element_kind": "operation"
+        }
+      ],
+      "next_operations": [
+        {
+          "id": "Id_ce8467e2-6246-4e1c-9844-536b392359e3",
+          "name": "Communication d'une nouvelle date de réception de la part du Fournisseur sur le portail",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "business_event"
+        }
+      ],
+      "input_documents": [],
+      "output_documents": [],
+      "notes": [],
+      "branches": [],
+      "order_ambiguous": false,
+      "validation_issue_codes": [
+        "PROCESS_WITHOUT_END_EVENT",
+        "PROCESS_WITHOUT_START_EVENT"
+      ]
+    },
+    {
+      "operation_number": 10,
+      "bpmn_element_id": "Id_ce8467e2-6246-4e1c-9844-536b392359e3",
+      "raw_name": "Communication d'une nouvelle date de réception de la part du Fournisseur sur le portail",
+      "actor_name": "Direction d'Approvisionnement",
+      "element_kind": "business_event",
+      "source_type": "intermediateThrowEvent",
+      "previous_operations": [
+        {
+          "id": "Id_9a6cc951-078e-4e91-9304-61cdc04b8219",
+          "name": "Transmettre la lettre de relance au Fournisseur via le portail et par mail",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "operation"
+        }
+      ],
+      "next_operations": [
+        {
+          "id": "Id_f3637652-e8c9-46f5-bb0f-acb9272969cf",
+          "name": "Mettre à jour le planning de livraisons prévues",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "operation"
+        }
+      ],
+      "input_documents": [],
+      "output_documents": [],
+      "notes": [],
+      "branches": [],
+      "order_ambiguous": false,
+      "validation_issue_codes": [
+        "PROCESS_WITHOUT_END_EVENT",
+        "PROCESS_WITHOUT_START_EVENT"
+      ]
+    },
+    {
+      "operation_number": 11,
+      "bpmn_element_id": "Id_f3637652-e8c9-46f5-bb0f-acb9272969cf",
+      "raw_name": "Mettre à jour le planning de livraisons prévues",
+      "actor_name": "Direction d'Approvisionnement",
+      "element_kind": "operation",
+      "source_type": "userTask",
+      "previous_operations": [
+        {
+          "id": "Id_ce8467e2-6246-4e1c-9844-536b392359e3",
+          "name": "Communication d'une nouvelle date de réception de la part du Fournisseur sur le portail",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "business_event"
+        }
+      ],
+      "next_operations": [
+        {
+          "id": "Id_bd4c5750-70f3-4c43-932f-c3f6c5dd5464",
+          "name": "Gestion des réceptions",
+          "actor_name": "Direction d'Approvisionnement",
+          "element_kind": "subprocess"
+        }
+      ],
+      "input_documents": [],
+      "output_documents": [],
+      "notes": [],
+      "branches": [],
+      "order_ambiguous": false,
+      "validation_issue_codes": [
+        "PROCESS_WITHOUT_END_EVENT",
+        "PROCESS_WITHOUT_START_EVENT"
+      ]
+    }
+  ]
+}

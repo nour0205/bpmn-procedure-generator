@@ -1,0 +1,378 @@
+{
+  "process_id": "Id_14e4a3e9-61cb-46d3-8ab0-3058189f16da",
+  "process_title": "Suivi Commandes",
+  "end_event_status": "absent",
+  "entry_operation_numbers": [
+    1
+  ],
+  "terminal_operation_numbers": [
+    5
+  ],
+  "operations": [
+    {
+      "number": 1,
+      "raw_name": "Lancement des commandes",
+      "actor": "Direction d'Approvisionnement",
+      "execution_mode": "subprocess",
+      "event_role": null,
+      "previous_operation_numbers": [],
+      "next_operation_numbers": [
+        2,
+        3
+      ],
+      "notes": [],
+      "business_rules": [],
+      "input_documents": [],
+      "output_documents": []
+    },
+    {
+      "number": 2,
+      "raw_name": "J+X",
+      "actor": null,
+      "execution_mode": "event",
+      "event_role": "intermediate",
+      "previous_operation_numbers": [
+        1
+      ],
+      "next_operation_numbers": [
+        4
+      ],
+      "notes": [],
+      "business_rules": [],
+      "input_documents": [],
+      "output_documents": []
+    },
+    {
+      "number": 3,
+      "raw_name": "Génération d'un reporting des commandes en cours",
+      "actor": "Le système",
+      "execution_mode": "automated",
+      "event_role": null,
+      "previous_operation_numbers": [
+        1
+      ],
+      "next_operation_numbers": [
+        5
+      ],
+      "notes": [
+        "Il est possible de filtrer les commandes par date, produit, etc.",
+        "Avec une possibilité de consulter le reliquat de livraison, le statut, etc."
+      ],
+      "business_rules": [],
+      "input_documents": [],
+      "output_documents": []
+    },
+    {
+      "number": 4,
+      "raw_name": "Relancer le Fournisseur sur le portail et par téléphone",
+      "actor": "Direction d'Approvisionnement",
+      "execution_mode": "human",
+      "event_role": null,
+      "previous_operation_numbers": [
+        2
+      ],
+      "next_operation_numbers": [
+        6
+      ],
+      "notes": [],
+      "business_rules": [],
+      "input_documents": [],
+      "output_documents": []
+    },
+    {
+      "number": 5,
+      "raw_name": "Gestion des réceptions",
+      "actor": "Direction d'Approvisionnement",
+      "execution_mode": "subprocess",
+      "event_role": null,
+      "previous_operation_numbers": [
+        3,
+        11
+      ],
+      "next_operation_numbers": [],
+      "notes": [],
+      "business_rules": [],
+      "input_documents": [],
+      "output_documents": []
+    },
+    {
+      "number": 6,
+      "raw_name": "J+Y sans réponse du Fournisseur",
+      "actor": null,
+      "execution_mode": "event",
+      "event_role": "intermediate",
+      "previous_operation_numbers": [
+        4
+      ],
+      "next_operation_numbers": [
+        7
+      ],
+      "notes": [],
+      "business_rules": [],
+      "input_documents": [],
+      "output_documents": []
+    },
+    {
+      "number": 7,
+      "raw_name": "Générer les lettres de relance",
+      "actor": "Direction d'Approvisionnement",
+      "execution_mode": "human",
+      "event_role": null,
+      "previous_operation_numbers": [
+        6,
+        8
+      ],
+      "next_operation_numbers": [
+        8
+      ],
+      "notes": [
+        "Sur la base d'un modèle pré-définis intégrant des données statiques et dynamiques"
+      ],
+      "business_rules": [],
+      "input_documents": [],
+      "output_documents": []
+    },
+    {
+      "number": 8,
+      "raw_name": "Valider la lettre de relance",
+      "actor": "Direction Générale",
+      "execution_mode": "human",
+      "event_role": null,
+      "previous_operation_numbers": [
+        7
+      ],
+      "next_operation_numbers": [
+        9,
+        7
+      ],
+      "notes": [],
+      "business_rules": [],
+      "input_documents": [],
+      "output_documents": []
+    },
+    {
+      "number": 9,
+      "raw_name": "Transmettre la lettre de relance au Fournisseur via le portail et par mail",
+      "actor": "Direction d'Approvisionnement",
+      "execution_mode": "human",
+      "event_role": null,
+      "previous_operation_numbers": [
+        8
+      ],
+      "next_operation_numbers": [
+        10
+      ],
+      "notes": [],
+      "business_rules": [],
+      "input_documents": [],
+      "output_documents": []
+    },
+    {
+      "number": 10,
+      "raw_name": "Communication d'une nouvelle date de réception de la part du Fournisseur sur le portail",
+      "actor": null,
+      "execution_mode": "event",
+      "event_role": "intermediate",
+      "previous_operation_numbers": [
+        9
+      ],
+      "next_operation_numbers": [
+        11
+      ],
+      "notes": [],
+      "business_rules": [],
+      "input_documents": [],
+      "output_documents": []
+    },
+    {
+      "number": 11,
+      "raw_name": "Mettre à jour le planning de livraisons prévues",
+      "actor": "Direction d'Approvisionnement",
+      "execution_mode": "human",
+      "event_role": null,
+      "previous_operation_numbers": [
+        10
+      ],
+      "next_operation_numbers": [
+        5
+      ],
+      "notes": [],
+      "business_rules": [],
+      "input_documents": [],
+      "output_documents": []
+    }
+  ],
+  "decisions": [
+    {
+      "source_operation_number": 1,
+      "gateway_name": "Alerte par rapport à la date de réception des pdts locaux/date d’embarquement pour les pdts importés",
+      "routing_mode": "exclusive",
+      "branches": [
+        {
+          "label": "Oui",
+          "condition": null,
+          "target_operation_number": 2,
+          "target_operation_name": "J+X",
+          "path_operation_numbers": [
+            2,
+            4,
+            6,
+            7,
+            8
+          ],
+          "is_loop_back": false,
+          "loop_back_to_operation_number": null,
+          "converges_to_operation_number": 5
+        },
+        {
+          "label": "Non",
+          "condition": null,
+          "target_operation_number": 3,
+          "target_operation_name": "Génération d'un reporting des commandes en cours",
+          "path_operation_numbers": [
+            3
+          ],
+          "is_loop_back": false,
+          "loop_back_to_operation_number": null,
+          "converges_to_operation_number": 5
+        }
+      ],
+      "shared_convergence_operation_number": 5
+    },
+    {
+      "source_operation_number": 8,
+      "gateway_name": "Validation ?",
+      "routing_mode": "exclusive",
+      "branches": [
+        {
+          "label": "oui",
+          "condition": null,
+          "target_operation_number": 9,
+          "target_operation_name": "Transmettre la lettre de relance au Fournisseur via le portail et par mail",
+          "path_operation_numbers": [
+            9,
+            10,
+            11
+          ],
+          "is_loop_back": false,
+          "loop_back_to_operation_number": null,
+          "converges_to_operation_number": 5
+        },
+        {
+          "label": "Non",
+          "condition": null,
+          "target_operation_number": 7,
+          "target_operation_name": "Générer les lettres de relance",
+          "path_operation_numbers": [
+            7
+          ],
+          "is_loop_back": true,
+          "loop_back_to_operation_number": 7,
+          "converges_to_operation_number": null
+        }
+      ],
+      "shared_convergence_operation_number": null
+    }
+  ],
+  "convergences": [
+    {
+      "operation_number": 5,
+      "operation_name": "Gestion des réceptions",
+      "incoming_operation_numbers": [
+        3,
+        11
+      ]
+    }
+  ],
+  "writing_blocks": [
+    {
+      "order": 1,
+      "block_type": "decision",
+      "source_operation_number": 1,
+      "parent_decision_source_number": null,
+      "parent_branch_label": null,
+      "gateway_name": "Alerte par rapport à la date de réception des pdts locaux/date d’embarquement pour les pdts importés",
+      "routing_mode": "exclusive",
+      "operation_numbers": [],
+      "branches": [
+        {
+          "label": "Non",
+          "condition": null,
+          "operation_numbers": [
+            3
+          ],
+          "nested_decision_source_numbers": [],
+          "is_loop_back": false,
+          "loop_back_to_operation_number": null,
+          "convergence_operation_number": 5
+        },
+        {
+          "label": "Oui",
+          "condition": null,
+          "operation_numbers": [
+            2,
+            4,
+            6,
+            7
+          ],
+          "nested_decision_source_numbers": [
+            8
+          ],
+          "is_loop_back": false,
+          "loop_back_to_operation_number": null,
+          "convergence_operation_number": 5
+        }
+      ],
+      "convergence_operation_number": 5
+    },
+    {
+      "order": 2,
+      "block_type": "nested_decision",
+      "source_operation_number": 8,
+      "parent_decision_source_number": 1,
+      "parent_branch_label": "Oui",
+      "gateway_name": "Validation ?",
+      "routing_mode": "exclusive",
+      "operation_numbers": [],
+      "branches": [
+        {
+          "label": "Non",
+          "condition": null,
+          "operation_numbers": [],
+          "nested_decision_source_numbers": [],
+          "is_loop_back": true,
+          "loop_back_to_operation_number": 7,
+          "convergence_operation_number": null
+        },
+        {
+          "label": "oui",
+          "condition": null,
+          "operation_numbers": [
+            9,
+            10,
+            11
+          ],
+          "nested_decision_source_numbers": [],
+          "is_loop_back": false,
+          "loop_back_to_operation_number": null,
+          "convergence_operation_number": 5
+        }
+      ],
+      "convergence_operation_number": null
+    },
+    {
+      "order": 3,
+      "block_type": "convergence",
+      "source_operation_number": null,
+      "parent_decision_source_number": null,
+      "parent_branch_label": null,
+      "gateway_name": null,
+      "routing_mode": null,
+      "operation_numbers": [
+        5
+      ],
+      "branches": [],
+      "convergence_operation_number": null
+    }
+  ]
+}
