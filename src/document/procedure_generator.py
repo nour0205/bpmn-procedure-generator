@@ -124,11 +124,8 @@ class ProcedureDocumentGenerator:
             "Traitement des demandes d’achat": bundle.metadata.title,
             "Cette procédure décrit la démarche à suivre pour la gestion "
             "des demandes d’achat.": (
-                bundle.procedure.purpose
-                or (
-                    "Cette procédure décrit les opérations du processus "
-                    f"« {bundle.metadata.title} »."
-                )
+                "Cette procédure décrit les opérations du processus "
+                f"« {bundle.metadata.title} »."
             ),
         }
 

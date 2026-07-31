@@ -56,6 +56,67 @@ def select_process_id(
     return candidates[0].id
 
 
+def is_technical_title(
+    value: str | None,
+    process_id: str,
+) -> bool:
+    """Return True when a title is missing or looks like a BPMN ID."""
+
+    title = str(value or "").strip()
+    normalized_process_id = str(process_id).strip()
+
+    return (
+        not title
+        or title == normalized_process_id
+        or title.startswith("Id_")
+        or title.startswith("Process_")
+    )
+
+
+def resolve_process_title(
+    *,
+    bpmn_model,
+    process_id: str,
+    procedure_title: str | None,
+    bpmn_path: Path,
+) -> str:
+    """
+    Resolve a readable process title.
+
+    Priority:
+    1. procedure metadata title;
+    2. BPMN process name;
+    3. BPMN filename.
+    """
+
+    if not is_technical_title(
+        procedure_title,
+        process_id,
+    ):
+        return str(procedure_title).strip()
+
+    process = bpmn_model.process_by_id(process_id)
+
+    if (
+        process is not None
+        and not is_technical_title(
+            process.name,
+            process_id,
+        )
+    ):
+        return str(process.name).strip()
+
+    filename_title = bpmn_path.stem.strip()
+
+    if filename_title:
+        return filename_title
+
+    raise ValueError(
+        "Unable to determine a readable title "
+        f"for BPMN process {process_id!r}."
+    )
+
+
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -105,6 +166,13 @@ def main(argv: list[str] | None = None) -> int:
             procedure
         )
 
+        process_title = resolve_process_title(
+            bpmn_model=bpmn_model,
+            process_id=process_id,
+            procedure_title=procedure.metadata.title,
+            bpmn_path=args.input,
+        )
+
     except (
         FileNotFoundError,
         BpmnParseError,
@@ -116,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
 
     export_data = {
         "process_id": procedure.metadata.process_id,
-        "title": procedure.metadata.title,
+        "title": process_title,
         "operation_count": len(contexts),
         "contexts": [
             context.model_dump(
