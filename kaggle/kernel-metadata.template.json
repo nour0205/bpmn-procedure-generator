@@ -1,0 +1,15 @@
+{
+  "id": "YOUR_KAGGLE_USERNAME/qwen-bpmn-combined-worker",
+  "title": "Qwen BPMN Combined Worker",
+  "code_file": "qwen-bpmn-combined-worker.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [
+    "YOUR_KAGGLE_USERNAME/bpmn-generation-inputs"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}

@@ -1,0 +1,3 @@
+# Local orchestration dependency.
+# The project's existing dependencies remain defined in pyproject.toml.
+kaggle>=1.6
