@@ -81,11 +81,23 @@ class KaggleCliClient:
         check: bool = True,
     ) -> CommandResult:
         args = [*self.command_prefix, *arguments]
+        command_environment = os.environ.copy()
+        command_environment.update(
+            {
+                "PYTHONUTF8": "1",
+                "PYTHONIOENCODING": "utf-8",
+            }
+        )
+
         completed = subprocess.run(
             args,
             cwd=cwd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=command_environment,
+            check=False,
         )
         result = CommandResult(
             args=tuple(args),
