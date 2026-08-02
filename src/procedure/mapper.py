@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import re
+
 from bpmn.enums import (
     BpmnElementType,
+    EventDefinitionType,
     TaskType,
 )
 from bpmn.models import (
@@ -100,7 +103,11 @@ class ProcedureMapper:
         return ProcedureModel(
             metadata=ProcedureMetadata(
                 process_id=process.id,
-                title=process.name or process.id,
+                title=(
+                    process.name
+                    or (participant.name if participant else None)
+                    or process.id
+                ),
                 source_path=model.metadata.source_path,
                 participant_name=(
                     participant.name
@@ -207,6 +214,8 @@ class ProcedureMapper:
                 direction="forward",
             )
 
+            actor_id, actor_name = self._resolve_actor(node)
+
             operations.append(
                 ProcedureOperation(
                     number=number,
@@ -215,8 +224,8 @@ class ProcedureMapper:
                     element_kind=self._element_kind(node),
                     source_type=node.element_type.value,
                     process_id=process_id,
-                    actor_id=node.lane_id,
-                    actor_name=node.lane_name,
+                    actor_id=actor_id,
+                    actor_name=actor_name,
                     input_document_ids=list(
                         getattr(
                             node,
@@ -280,6 +289,104 @@ class ProcedureMapper:
             return ProcedureElementKind.BUSINESS_EVENT
 
         return ProcedureElementKind.OPERATION
+
+    @classmethod
+    def _resolve_actor(
+        cls,
+        node: FlowNode,
+    ) -> tuple[str | None, str | None]:
+        """Resolve the semantic executor instead of blindly using the lane.
+
+        Lanes remain useful context, but they are not necessarily the actor of
+        automated tasks, timer events or events explicitly initiated by an
+        external party.
+        """
+
+        if (
+            isinstance(node, Task)
+            and node.task_type == TaskType.SERVICE
+        ):
+            return None, "Système d'information"
+
+        if isinstance(node, Event):
+            if any(
+                definition.definition_type
+                == EventDefinitionType.TIMER
+                for definition in node.definitions
+            ):
+                return None, "Événement temporel"
+
+            external_actor = cls._explicit_external_actor(
+                node.name
+            )
+
+            if external_actor:
+                return None, external_actor
+
+        return node.lane_id, node.lane_name
+
+    @staticmethod
+    def _explicit_external_actor(
+        name: str | None,
+    ) -> str | None:
+        """Extract an actor only when the BPMN label states it explicitly."""
+
+        if not name:
+            return None
+
+        match = re.search(
+            r"\bde la part (?:du|de la|des|de l['’])\s+"
+            r"(.+?)(?=\s+(?:sur|via|par)\b|[,.;]|$)",
+            name,
+            flags=re.IGNORECASE,
+        )
+
+        if not match:
+            return None
+
+        actor = " ".join(match.group(1).split()).strip()
+
+        if not actor:
+            return None
+
+        return actor[0].upper() + actor[1:]
+
+    @staticmethod
+    def _path_exists(
+        *,
+        model: BpmnModel,
+        start_id: str,
+        target_id: str,
+    ) -> bool:
+        """Return True when target_id is reachable from start_id."""
+
+        start_node = model.node_by_id(start_id)
+
+        if start_node is None:
+            return False
+
+        graph = model.graphs.get(start_node.process_id)
+
+        if graph is None:
+            return False
+
+        queue = [start_id]
+        visited: set[str] = set()
+
+        while queue:
+            current = queue.pop(0)
+
+            if current in visited:
+                continue
+
+            visited.add(current)
+
+            if current == target_id:
+                return True
+
+            queue.extend(graph.adjacency.get(current, []))
+
+        return False
 
     @staticmethod
     def _map_documents(
@@ -483,6 +590,13 @@ class ProcedureMapper:
                         label=flow.name,
                         condition=flow.condition_expression,
                         is_default=flow.is_default,
+                        is_loop_back=(
+                            ProcedureMapper._path_exists(
+                                model=model,
+                                start_id=target_id,
+                                target_id=node_id,
+                            )
+                        ),
                         target_element_id=target_id,
                     )
                 )

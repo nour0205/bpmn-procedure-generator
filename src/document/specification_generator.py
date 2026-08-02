@@ -16,6 +16,7 @@ from docx.text.paragraph import Paragraph
 
 from .models import DocumentBundle
 from .narrative_models import GeneratedNarrative
+from .text_normalization import normalize_french_business_text
 
 
 class SpecificationGenerationError(RuntimeError):
@@ -72,6 +73,11 @@ class SpecificationDocumentGenerator:
         self._add_narrative_section(
             document=document,
             paragraphs=narrative.paragraphs,
+        )
+
+        self._add_unresolved_points(
+            document=document,
+            points=bundle.specification.unresolved_points,
         )
 
         document.save(
@@ -302,7 +308,7 @@ class SpecificationDocumentGenerator:
             paragraph = document.add_paragraph()
 
             paragraph.alignment = (
-                WD_ALIGN_PARAGRAPH.JUSTIFY
+                WD_ALIGN_PARAGRAPH.LEFT
             )
 
             paragraph.paragraph_format.line_spacing = (
@@ -314,15 +320,46 @@ class SpecificationDocumentGenerator:
             )
 
             paragraph.paragraph_format.first_line_indent = (
-                Cm(0.6)
+                Cm(0.35)
             )
 
             run = paragraph.add_run(
-                text.strip()
+                normalize_french_business_text(text)
             )
 
             run.font.name = "Arial"
             run.font.size = Pt(11)
+
+    @classmethod
+    def _add_unresolved_points(
+        cls,
+        *,
+        document: DocxDocument,
+        points: list[str],
+    ) -> None:
+        """Add a concise human-review section when values are unresolved."""
+
+        if not points:
+            return
+
+        heading = document.add_paragraph(
+            "Points à confirmer",
+            style="Heading 1",
+        )
+        heading.paragraph_format.space_before = Pt(8)
+        heading.paragraph_format.space_after = Pt(6)
+
+        for point in points:
+            paragraph = document.add_paragraph(
+                style="List Bullet"
+            )
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            paragraph.paragraph_format.space_after = Pt(4)
+            run = paragraph.add_run(
+                normalize_french_business_text(point)
+            )
+            run.font.name = "Arial"
+            run.font.size = Pt(10)
 
     @staticmethod
     def _add_horizontal_rule(

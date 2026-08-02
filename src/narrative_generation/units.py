@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from collections import Counter
+from collections import Counter, defaultdict
 
 from narrative_generation.facts import new_fact, operation_fact
 from narrative_generation.text import clean_sentence, normalize_text
@@ -58,11 +58,21 @@ def decision_map(plan: dict) -> dict[int, dict]:
 
 
 def branch_label(branch: dict, index: int) -> str:
-    return str(
+    value = str(
         branch.get("label")
         or branch.get("condition")
         or f"Branche {index + 1}"
     ).strip()
+
+    normalized = normalize_text(value)
+
+    if normalized == "oui":
+        return "Oui"
+
+    if normalized == "non":
+        return "Non"
+
+    return value
 
 
 def ordered_branches(
@@ -188,6 +198,8 @@ def decision_sentence(
 def build_narrative_units(
     plan: dict,
 ) -> tuple[list[dict], dict, list[str]]:
+    """Build units while keeping nested decisions inside their parent branch."""
+
     operations_by_number = operation_map(plan)
     convergence_numbers = explicit_convergence_numbers(plan)
     resolved_structural_numbers = (
@@ -204,186 +216,131 @@ def build_narrative_units(
         key=lambda block: int(block.get("order", 0)),
     )
 
+    nested_by_parent: dict[
+        tuple[int, str],
+        list[dict],
+    ] = defaultdict(list)
+
     for block in blocks:
+        parent_source = block.get(
+            "parent_decision_source_number"
+        )
+        parent_label = block.get("parent_branch_label")
+
+        if parent_source is None or not parent_label:
+            continue
+
+        nested_by_parent[
+            (
+                int(parent_source),
+                normalize_text(str(parent_label)),
+            )
+        ].append(block)
+
+    emitted_orders: set[int] = set()
+
+    def emit_sequence_block(block: dict) -> None:
         block_order = int(block.get("order", 0))
         block_type = str(block.get("block_type", ""))
-
-        if block_type in DECISION_BLOCK_TYPES:
-            source_operation = require_operation(
-                operations_by_number,
-                block["source_operation_number"],
+        numbers = [
+            int(number)
+            for number in block.get(
+                "operation_numbers",
+                [],
             )
-            branches = ordered_branches(plan, block)
-            labels = [
-                branch_label(branch, index)
-                for index, branch in enumerate(branches)
-            ]
-            source_number = int(source_operation["number"])
-
-            decision_prefix = None
-
-            if (
-                block_type == "nested_decision"
-                and block.get("parent_branch_label")
-            ):
-                decision_prefix = (
-                    "Dans le prolongement du scénario "
-                    f"« {block['parent_branch_label']} », "
+        ]
+        facts = [
+            operation_fact(
+                require_operation(
+                    operations_by_number,
+                    number,
                 )
+            )
+            for number in numbers
+        ]
 
-            units.append(
-                {
-                    "unit_id": f"block_{block_order}_decision",
-                    "block_order": block_order,
-                    "unit_type": "decision",
-                    "branch_label": None,
-                    "prefix": decision_prefix,
-                    "facts": [
-                        operation_fact(source_operation),
-                        new_fact(
-                            fact_id=(
-                                f"block_{block_order}_decision_rule"
-                            ),
-                            kind="decision",
-                            text=decision_sentence(block, labels),
-                            locked=True,
-                            source_text=(
-                                str(block.get("gateway_name", ""))
-                                + " "
-                                + " ".join(labels)
-                            ),
-                        ),
-                    ],
-                    "owned_operation_numbers": [source_number],
-                    "referenced_operation_numbers": [],
-                }
+        if not facts:
+            return
+
+        prefix = (
+            "À l’issue des différents scénarios, "
+            if block_type == "convergence"
+            else None
+        )
+
+        units.append(
+            {
+                "unit_id": f"block_{block_order}_{block_type}",
+                "block_order": block_order,
+                "unit_type": block_type,
+                "branch_label": None,
+                "prefix": prefix,
+                "facts": facts,
+                "owned_operation_numbers": numbers,
+                "referenced_operation_numbers": [],
+            }
+        )
+        owned_numbers.extend(numbers)
+
+    def emit_decision_block(block: dict) -> None:
+        block_order = int(block.get("order", 0))
+        block_type = str(block.get("block_type", ""))
+        source_operation = require_operation(
+            operations_by_number,
+            block["source_operation_number"],
+        )
+        branches = ordered_branches(plan, block)
+        labels = [
+            branch_label(branch, index)
+            for index, branch in enumerate(branches)
+        ]
+        source_number = int(source_operation["number"])
+
+        decision_prefix = None
+
+        if (
+            block_type == "nested_decision"
+            and block.get("parent_branch_label")
+        ):
+            decision_prefix = (
+                "Dans le prolongement du scénario "
+                f"« {branch_label({'label': block['parent_branch_label']}, 0)} », "
             )
 
-            owned_numbers.append(source_number)
-
-            for branch_index, branch in enumerate(branches):
-                label = branch_label(branch, branch_index)
-                branch_numbers = [
-                    int(number)
-                    for number in branch.get(
-                        "operation_numbers",
-                        [],
-                    )
-                ]
-                facts = [
-                    operation_fact(
-                        require_operation(
-                            operations_by_number,
-                            number,
-                        )
-                    )
-                    for number in branch_numbers
-                ]
-
-                loop_target_number = branch.get(
-                    "loop_back_to_operation_number"
-                )
-                nested_decisions = [
-                    int(number)
-                    for number in branch.get(
-                        "nested_decision_source_numbers",
-                        [],
-                    )
-                ]
-                convergence_number = branch.get(
-                    "convergence_operation_number"
-                )
-                referenced: list[int] = []
-
-                if loop_target_number is not None:
-                    target = require_operation(
-                        operations_by_number,
-                        loop_target_number,
-                    )
-                    facts.append(
-                        new_fact(
-                            fact_id=(
-                                f"block_{block_order}_"
-                                f"branch_{branch_index + 1}_loop"
-                            ),
-                            kind="loop",
-                            text=(
-                                "Le flux revient à l’activité "
-                                f"« {target['raw_name']} »"
-                            ),
-                            locked=True,
-                            source_text=str(target["raw_name"]),
-                        )
-                    )
-                    referenced = [int(loop_target_number)]
-
-                elif (
-                    convergence_number is not None
-                    and not nested_decisions
-                    and int(convergence_number)
-                    not in convergence_numbers
-                ):
-                    target = require_operation(
-                        operations_by_number,
-                        convergence_number,
-                    )
-                    facts.append(
-                        new_fact(
-                            fact_id=(
-                                f"block_{block_order}_"
-                                f"branch_{branch_index + 1}_"
-                                "convergence"
-                            ),
-                            kind="convergence_reference",
-                            text=(
-                                "Le flux rejoint l’activité commune "
-                                f"« {target['raw_name']} »"
-                            ),
-                            locked=True,
-                            source_text=str(target["raw_name"]),
-                        )
-                    )
-                    referenced = [int(convergence_number)]
-
-                if not facts:
-                    facts.append(
-                        new_fact(
-                            fact_id=(
-                                f"block_{block_order}_"
-                                f"branch_{branch_index + 1}_empty"
-                            ),
-                            kind="empty_branch",
-                            text=(
-                                "Le flux se poursuit directement "
-                                "vers la suite prévue par le processus"
-                            ),
-                            locked=True,
-                            source_text=label,
-                        )
-                    )
-
-                units.append(
-                    {
-                        "unit_id": (
-                            f"block_{block_order}_"
-                            f"branch_{branch_index + 1}"
+        units.append(
+            {
+                "unit_id": f"block_{block_order}_decision",
+                "block_order": block_order,
+                "unit_type": "decision",
+                "branch_label": None,
+                "prefix": decision_prefix,
+                "facts": [
+                    operation_fact(source_operation),
+                    new_fact(
+                        fact_id=(
+                            f"block_{block_order}_decision_rule"
                         ),
-                        "block_order": block_order,
-                        "unit_type": "decision_branch",
-                        "branch_label": label,
-                        "prefix": f"Dans le scénario « {label} », ",
-                        "facts": facts,
-                        "owned_operation_numbers": branch_numbers,
-                        "referenced_operation_numbers": referenced,
-                    }
-                )
-                owned_numbers.extend(branch_numbers)
-                referenced_numbers.extend(referenced)
+                        kind="decision",
+                        text=decision_sentence(block, labels),
+                        locked=True,
+                        source_text=(
+                            str(block.get("gateway_name", ""))
+                            + " "
+                            + " ".join(labels)
+                        ),
+                    ),
+                ],
+                "owned_operation_numbers": [source_number],
+                "referenced_operation_numbers": [],
+            }
+        )
+        owned_numbers.append(source_number)
 
-        elif block_type in SEQUENCE_BLOCK_TYPES:
-            numbers = [
+        for branch_index, branch in enumerate(branches):
+            label = branch_label(branch, branch_index)
+            branch_numbers = [
                 int(number)
-                for number in block.get(
+                for number in branch.get(
                     "operation_numbers",
                     [],
                 )
@@ -395,39 +352,162 @@ def build_narrative_units(
                         number,
                     )
                 )
-                for number in numbers
+                for number in branch_numbers
             ]
 
-            if not facts:
-                continue
-
-            prefix = (
-                "Après la convergence des branches, "
-                if block_type == "convergence"
-                else None
+            loop_target_number = branch.get(
+                "loop_back_to_operation_number"
             )
+            nested_decisions = [
+                int(number)
+                for number in branch.get(
+                    "nested_decision_source_numbers",
+                    [],
+                )
+            ]
+            convergence_number = branch.get(
+                "convergence_operation_number"
+            )
+            referenced: list[int] = []
+
+            if loop_target_number is not None:
+                target = require_operation(
+                    operations_by_number,
+                    loop_target_number,
+                )
+                facts.append(
+                    new_fact(
+                        fact_id=(
+                            f"block_{block_order}_"
+                            f"branch_{branch_index + 1}_loop"
+                        ),
+                        kind="loop",
+                        text=(
+                            "Le flux revient à l’activité "
+                            f"« {target['raw_name']} »"
+                        ),
+                        locked=True,
+                        source_text=str(target["raw_name"]),
+                    )
+                )
+                referenced = [int(loop_target_number)]
+
+            elif (
+                convergence_number is not None
+                and not nested_decisions
+                and int(convergence_number)
+                not in convergence_numbers
+            ):
+                target = require_operation(
+                    operations_by_number,
+                    convergence_number,
+                )
+                facts.append(
+                    new_fact(
+                        fact_id=(
+                            f"block_{block_order}_"
+                            f"branch_{branch_index + 1}_"
+                            "convergence"
+                        ),
+                        kind="convergence_reference",
+                        text=(
+                            "Le flux rejoint l’activité commune "
+                            f"« {target['raw_name']} »"
+                        ),
+                        locked=True,
+                        source_text=str(target["raw_name"]),
+                    )
+                )
+                referenced = [int(convergence_number)]
+
+            if not facts:
+                facts.append(
+                    new_fact(
+                        fact_id=(
+                            f"block_{block_order}_"
+                            f"branch_{branch_index + 1}_empty"
+                        ),
+                        kind="empty_branch",
+                        text=(
+                            "Le flux se poursuit directement "
+                            "vers la suite prévue par le processus"
+                        ),
+                        locked=True,
+                        source_text=label,
+                    )
+                )
+
+            branch_prefix = f"Dans le scénario « {label} », "
+
+            if (
+                block_type == "nested_decision"
+                and normalize_text(
+                    str(block.get("gateway_name", ""))
+                ).startswith("validation")
+            ):
+                branch_prefix = (
+                    "En cas de validation, "
+                    if normalize_text(label) == "oui"
+                    else "En cas de refus de validation, "
+                )
 
             units.append(
                 {
                     "unit_id": (
-                        f"block_{block_order}_{block_type}"
+                        f"block_{block_order}_"
+                        f"branch_{branch_index + 1}"
                     ),
                     "block_order": block_order,
-                    "unit_type": block_type,
-                    "branch_label": None,
-                    "prefix": prefix,
+                    "unit_type": "decision_branch",
+                    "branch_label": label,
+                    "prefix": branch_prefix,
                     "facts": facts,
-                    "owned_operation_numbers": numbers,
-                    "referenced_operation_numbers": [],
+                    "owned_operation_numbers": branch_numbers,
+                    "referenced_operation_numbers": referenced,
                 }
             )
-            owned_numbers.extend(numbers)
+            owned_numbers.extend(branch_numbers)
+            referenced_numbers.extend(referenced)
 
+            nested_blocks = nested_by_parent.get(
+                (
+                    source_number,
+                    normalize_text(label),
+                ),
+                [],
+            )
+
+            for nested_block in nested_blocks:
+                emit_block(nested_block)
+
+    def emit_block(block: dict) -> None:
+        block_order = int(block.get("order", 0))
+
+        if block_order in emitted_orders:
+            return
+
+        emitted_orders.add(block_order)
+        block_type = str(block.get("block_type", ""))
+
+        if block_type in DECISION_BLOCK_TYPES:
+            emit_decision_block(block)
+        elif block_type in SEQUENCE_BLOCK_TYPES:
+            emit_sequence_block(block)
         else:
             raise ValueError(
                 "Unsupported narrative block type: "
                 f"{block_type!r}."
             )
+
+    # Emit only top-level blocks first. Nested blocks are inserted directly
+    # after the parent branch that contains them.
+    for block in blocks:
+        if block.get("parent_decision_source_number") is None:
+            emit_block(block)
+
+    # Defensive coverage for malformed/legacy plans.
+    for block in blocks:
+        emit_block(block)
 
     expected_numbers = set(operations_by_number)
     owned_set = set(owned_numbers)

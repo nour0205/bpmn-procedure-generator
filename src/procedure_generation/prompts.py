@@ -30,6 +30,8 @@ Règles impératives :
 - Ne déduis jamais une finalité absente du libellé, des annotations ou des
   règles métier.
 - Rédige une ou deux phrases professionnelles et concises.
+- Développe les abréviations évidentes dans le texte final (par exemple « pdts » devient « produits »).
+- Corrige les accords fautifs des annotations sans modifier leur sens (par exemple « modèle pré-définis » devient « modèle prédéfini »).
 - Retourne uniquement un objet JSON valide, sans texte avant ou après.
 """.strip()
 

@@ -16,6 +16,7 @@ SYSTEM_PROMPT = (
     "supprimer ni ajouter d'information ;\n"
     "- corrige uniquement les fautes d’orthographe, d’accord et de "
     "ponctuation ;\n"
+    "- développe les abréviations évidentes comme « pdts » en « produits » ;\n"
     "- transforme les fragments issus des notes en phrases complètes "
     "et naturelles.\n\n"
     "RÈGLES ABSOLUES\n\n"

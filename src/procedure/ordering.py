@@ -1,8 +1,6 @@
-"""Deterministic ordering of BPMN activities for procedure generation."""
+"""Deterministic structured ordering of BPMN activities."""
 
 from __future__ import annotations
-
-from collections import deque
 
 from bpmn.enums import EventType
 from bpmn.models import BpmnModel, Event, FlowNode
@@ -13,14 +11,21 @@ class ProcedureOrderingError(Exception):
 
 
 class ProcedureOrderer:
-    """Produce a stable order of documentable BPMN activities."""
+    """Produce a stable business-readable order of documentable BPMN nodes.
+
+    The traversal is depth-first so one branch is completed before the next
+    branch is narrated. Shared continuation nodes are postponed until all of
+    their forward predecessors have been visited. Explicit loop-back edges are
+    detected separately and never cause an already described operation to be
+    emitted a second time.
+    """
 
     def order_process(
         self,
         model: BpmnModel,
         process_id: str,
     ) -> list[str]:
-        """Return ordered BPMN IDs for tasks and subprocess activities."""
+        """Return BPMN IDs in structured execution order."""
 
         graph = model.graphs.get(process_id)
 
@@ -42,48 +47,189 @@ class ProcedureOrderer:
             if node_id in node_by_id
         ]
 
-        queue: deque[str] = deque(
-            sorted(entry_ids)
+        if not entry_ids and node_by_id:
+            entry_ids = sorted(node_by_id)
+
+        back_edges = self._classify_back_edges(
+            model=model,
+            node_by_id=node_by_id,
+            entry_ids=entry_ids,
+            adjacency=graph.adjacency,
         )
 
+        forward_predecessors = {
+            node_id: {
+                predecessor_id
+                for predecessor_id in graph.predecessors.get(
+                    node_id,
+                    [],
+                )
+                if (
+                    predecessor_id in node_by_id
+                    and (predecessor_id, node_id) not in back_edges
+                )
+            }
+            for node_id in node_by_id
+        }
+
+        convergence_ids = {
+            node_id
+            for node_id, predecessors in forward_predecessors.items()
+            if len(predecessors) > 1
+        }
+
         visited: set[str] = set()
+        active: set[str] = set()
+        postponed: set[str] = set()
         ordered_activity_ids: list[str] = []
 
-        while queue:
-            node_id = queue.popleft()
+        def predecessors_ready(node_id: str) -> bool:
+            return forward_predecessors.get(node_id, set()).issubset(
+                visited
+            )
 
-            if node_id in visited:
-                continue
+        def visit(node_id: str) -> None:
+            if (
+                node_id in visited
+                or node_id in active
+                or node_id not in node_by_id
+            ):
+                return
 
+            if (
+                node_id in convergence_ids
+                and not predecessors_ready(node_id)
+            ):
+                postponed.add(node_id)
+                return
+
+            active.add(node_id)
             visited.add(node_id)
+            postponed.discard(node_id)
 
-            node = node_by_id.get(node_id)
-
-            if node is None:
-                continue
+            node = node_by_id[node_id]
 
             if self._is_documentable_activity(node):
-                ordered_activity_ids.append(node.id)
+                ordered_activity_ids.append(node_id)
 
-            successors = graph.adjacency.get(node_id, [])
-
-            for successor_id in self._sort_successors(
+            successors = self._sort_successors(
                 model=model,
-                successor_ids=successors,
-            ):
-                if successor_id not in visited:
-                    queue.append(successor_id)
+                successor_ids=[
+                    successor_id
+                    for successor_id in graph.adjacency.get(
+                        node_id,
+                        [],
+                    )
+                    if (
+                        successor_id in node_by_id
+                        and (node_id, successor_id) not in back_edges
+                    )
+                ],
+            )
 
-        unreachable_activities = sorted(
+            for successor_id in successors:
+                visit(successor_id)
+                drain_ready_postponed()
+
+            active.remove(node_id)
+
+        def drain_ready_postponed() -> None:
+            while True:
+                ready = [
+                    node_id
+                    for node_id in postponed
+                    if predecessors_ready(node_id)
+                ]
+
+                if not ready:
+                    return
+
+                for node_id in self._sort_successors(
+                    model=model,
+                    successor_ids=ready,
+                ):
+                    visit(node_id)
+
+        for entry_id in self._sort_successors(
+            model=model,
+            successor_ids=entry_ids,
+        ):
+            visit(entry_id)
+            drain_ready_postponed()
+
+        # Preserve disconnected or structurally unusual components.
+        for node_id in self._sort_successors(
+            model=model,
+            successor_ids=list(node_by_id),
+        ):
+            visit(node_id)
+            drain_ready_postponed()
+
+        unreachable_activities = [
             node.id
             for node in node_by_id.values()
             if self._is_documentable_activity(node)
-            and node.id not in visited
+            and node.id not in ordered_activity_ids
+        ]
+
+        ordered_activity_ids.extend(
+            self._sort_successors(
+                model=model,
+                successor_ids=unreachable_activities,
+            )
         )
 
-        ordered_activity_ids.extend(unreachable_activities)
-
         return ordered_activity_ids
+
+    def _classify_back_edges(
+        self,
+        *,
+        model: BpmnModel,
+        node_by_id: dict[str, FlowNode],
+        entry_ids: list[str],
+        adjacency: dict[str, list[str]],
+    ) -> set[tuple[str, str]]:
+        """Classify DFS back edges without treating every cycle edge as back."""
+
+        visited: set[str] = set()
+        active: set[str] = set()
+        back_edges: set[tuple[str, str]] = set()
+
+        def walk(node_id: str) -> None:
+            if node_id in visited or node_id not in node_by_id:
+                return
+
+            visited.add(node_id)
+            active.add(node_id)
+
+            for successor_id in self._sort_successors(
+                model=model,
+                successor_ids=[
+                    item
+                    for item in adjacency.get(node_id, [])
+                    if item in node_by_id
+                ],
+            ):
+                if successor_id in active:
+                    back_edges.add((node_id, successor_id))
+                elif successor_id not in visited:
+                    walk(successor_id)
+
+            active.remove(node_id)
+
+        for entry_id in self._sort_successors(
+            model=model,
+            successor_ids=entry_ids,
+        ):
+            walk(entry_id)
+
+        for node_id in self._sort_successors(
+            model=model,
+            successor_ids=list(node_by_id),
+        ):
+            walk(node_id)
+
+        return back_edges
 
     @staticmethod
     def _is_documentable_activity(
@@ -131,6 +277,6 @@ class ProcedureOrderer:
             )
 
         return sorted(
-            successor_ids,
+            dict.fromkeys(successor_ids),
             key=sort_key,
         )

@@ -57,6 +57,24 @@ class ProcedureDocumentGenerator:
             bundle=bundle,
         )
 
+        self._populate_business_owned_fields(
+            document=document,
+        )
+
+        self._populate_documents_section(
+            document=document,
+            bundle=bundle,
+        )
+
+        self._populate_unresolved_points(
+            document=document,
+            bundle=bundle,
+        )
+
+        self._compact_presentation_section(
+            document=document,
+        )
+
         operations_table = self._find_operations_table(
             document
         )
@@ -93,22 +111,6 @@ class ProcedureDocumentGenerator:
             bundle=bundle,
         )
 
-        if bundle.documents:
-            documents_table = (
-                self._find_table_after_heading(
-                    document=document,
-                    heading_text=(
-                        "C. Documents / Etats utilisés"
-                    ),
-                )
-            )
-
-            if documents_table is not None:
-                self._populate_documents_table(
-                    table=documents_table,
-                    bundle=bundle,
-                )
-
         document.save(destination_path)
 
         return destination_path
@@ -124,8 +126,19 @@ class ProcedureDocumentGenerator:
             "Traitement des demandes d’achat": bundle.metadata.title,
             "Cette procédure décrit la démarche à suivre pour la gestion "
             "des demandes d’achat.": (
-                "Cette procédure décrit les opérations du processus "
-                f"« {bundle.metadata.title} »."
+                bundle.procedure.purpose
+                or (
+                    "Cette procédure décrit les opérations du processus "
+                    f"« {bundle.metadata.title} »."
+                )
+            ),
+            "Date de dernière modif. :": (
+                "Date de dernière modif. : "
+                + (bundle.metadata.last_modified_date or "À compléter")
+            ),
+            "Date de dernière modif.\xa0:": (
+                "Date de dernière modif.\xa0: "
+                + (bundle.metadata.last_modified_date or "À compléter")
             ),
         }
 
@@ -144,13 +157,231 @@ class ProcedureDocumentGenerator:
                 bundle.metadata.creation_date
             )
 
+        seen_paragraphs: set[object] = set()
+
         for paragraph in self._iter_all_paragraphs(
             document
         ):
+            element_key = paragraph._p
+
+            if element_key in seen_paragraphs:
+                continue
+
+            seen_paragraphs.add(element_key)
             self._replace_text_in_paragraph(
                 paragraph=paragraph,
                 replacements=replacements,
             )
+
+    @classmethod
+    def _populate_business_owned_fields(
+        cls,
+        *,
+        document: DocxDocument,
+    ) -> None:
+        """Mark administrative fields that require business ownership."""
+
+        expected_headers = {
+            ("nom", "signature"),
+            ("nom", "fonction", "date", "signature"),
+            ("nom", "fonction"),
+        }
+
+        for table in document.tables:
+            if len(table.rows) < 2:
+                continue
+
+            headers = tuple(
+                cls._normalize_text(cell.text)
+                for cell in table.rows[0].cells
+            )
+
+            if headers not in expected_headers:
+                continue
+
+            first_data_row = table.rows[1]
+
+            if any(cell.text.strip() for cell in first_data_row.cells):
+                continue
+
+            cls._set_cell_text(
+                cell=first_data_row.cells[0],
+                text="À compléter par le métier",
+                alignment=WD_ALIGN_PARAGRAPH.LEFT,
+            )
+
+    @classmethod
+    def _populate_documents_section(
+        cls,
+        *,
+        document: DocxDocument,
+        bundle: DocumentBundle,
+    ) -> None:
+        """Populate Section C even when the template has no table."""
+
+        heading = cls._find_paragraph_containing(
+            document,
+            "Documents / Etats utilisés",
+        )
+
+        if heading is None:
+            return
+
+        if bundle.documents:
+            items = []
+
+            for document_item in bundle.documents:
+                operation_numbers = [
+                    str(operation.number)
+                    for operation in bundle.operations
+                    if operation.bpmn_element_id
+                    in {
+                        *document_item.produced_by_operation_ids,
+                        *document_item.consumed_by_operation_ids,
+                    }
+                ]
+                reference = (
+                    f" (opérations {', '.join(operation_numbers)})"
+                    if operation_numbers
+                    else ""
+                )
+                items.append(f"{document_item.name}{reference}")
+
+            text = " ; ".join(items) + "."
+        else:
+            text = (
+                "Non renseigné dans le modèle BPMN — "
+                "à compléter par le métier."
+            )
+
+        paragraph = cls._insert_paragraph_after(heading)
+        cls._configure_paragraph(
+            paragraph,
+            alignment=WD_ALIGN_PARAGRAPH.LEFT,
+            space_after=Pt(8),
+        )
+        cls._add_run(paragraph=paragraph, text=text, italic=True)
+
+    @classmethod
+    def _populate_unresolved_points(
+        cls,
+        *,
+        document: DocxDocument,
+        bundle: DocumentBundle,
+    ) -> None:
+        """Expose unresolved business parameters instead of hiding them."""
+
+        points = bundle.specification.unresolved_points
+
+        if not points:
+            return
+
+        purpose = cls._find_paragraph_containing(
+            document,
+            bundle.procedure.purpose or "",
+        )
+
+        if purpose is None:
+            return
+
+        paragraph = cls._insert_paragraph_after(purpose)
+        cls._configure_paragraph(
+            paragraph,
+            alignment=WD_ALIGN_PARAGRAPH.LEFT,
+            space_before=Pt(4),
+            space_after=Pt(8),
+        )
+        cls._add_run(
+            paragraph=paragraph,
+            text="Points à confirmer : ",
+            bold=True,
+        )
+        cls._add_run(
+            paragraph=paragraph,
+            text=" ; ".join(points),
+            italic=True,
+        )
+
+
+    @classmethod
+    def _compact_presentation_section(
+        cls,
+        *,
+        document: DocxDocument,
+    ) -> None:
+        """Remove template spacer paragraphs before the next section break."""
+
+        paragraphs = list(document.paragraphs)
+        anchor_index = next(
+            (
+                index
+                for index, paragraph in enumerate(paragraphs)
+                if "se référer à" in paragraph.text.casefold()
+            ),
+            None,
+        )
+
+        if anchor_index is None:
+            return
+
+        removable: list[Paragraph] = []
+
+        for paragraph in paragraphs[anchor_index + 1 :]:
+            paragraph_properties = paragraph._p.pPr
+            has_section_break = (
+                paragraph_properties is not None
+                and paragraph_properties.sectPr is not None
+            )
+
+            if has_section_break:
+                break
+
+            if paragraph.text.strip():
+                removable.clear()
+                continue
+
+            removable.append(paragraph)
+
+        for paragraph in removable:
+            parent = paragraph._p.getparent()
+            if parent is not None:
+                parent.remove(paragraph._p)
+
+    @classmethod
+    def _find_paragraph_containing(
+        cls,
+        document: DocxDocument,
+        text: str,
+    ) -> Paragraph | None:
+        normalized_target = cls._normalize_text(text)
+
+        if not normalized_target:
+            return None
+
+        for paragraph in cls._iter_all_paragraphs(document):
+            if normalized_target in cls._normalize_text(paragraph.text):
+                return paragraph
+
+        return None
+
+    @staticmethod
+    def _insert_paragraph_after(
+        paragraph: Paragraph,
+    ) -> Paragraph:
+        new_element = OxmlElement("w:p")
+        paragraph._p.addnext(new_element)
+        return Paragraph(new_element, paragraph._parent)
+
+    @staticmethod
+    def _format_actor_name(
+        actor_name: str | None,
+    ) -> str:
+        value = " ".join(str(actor_name or "").split()).strip()
+
+        if value.startswith("Direction d'"):
+            return value.replace("Direction ", "Direction\n", 1)
+
+        return value
 
     @classmethod
     def _find_operations_table(
@@ -332,6 +563,7 @@ class ProcedureDocumentGenerator:
             )
             for operation in operations
             for branch in operation.branches
+            if not branch.is_loop_back
         }
 
         for operation in operations:
@@ -341,9 +573,8 @@ class ProcedureDocumentGenerator:
                 row
             )
 
-            actor_text = (
+            actor_text = cls._format_actor_name(
                 operation.actor_name
-                or ""
             )
 
             document_names = list(
@@ -538,6 +769,31 @@ class ProcedureDocumentGenerator:
             italic=True,
         )
 
+        for branch in operation.branches:
+            if not branch.is_loop_back:
+                continue
+
+            loop_paragraph = cell.add_paragraph()
+            cls._configure_paragraph(
+                loop_paragraph,
+                alignment=WD_ALIGN_PARAGRAPH.LEFT,
+                space_after=Pt(2),
+            )
+            label = branch.label or branch.condition or "Retour"
+            target = (
+                branch.target_operation_name
+                or "l’opération précédente"
+            )
+            cls._add_run(
+                paragraph=loop_paragraph,
+                text=f"{label} : ",
+                bold=True,
+            )
+            cls._add_run(
+                paragraph=loop_paragraph,
+                text=f"retour à l’activité « {target} ».",
+            )
+
     @staticmethod
     def _find_table_after_heading(
         document: DocxDocument,
@@ -657,12 +913,19 @@ class ProcedureDocumentGenerator:
 
         if not controls:
             empty_row = table.add_row()
+            merged = empty_row.cells[0]
 
-            for cell in empty_row.cells:
-                cls._set_cell_text(
-                    cell=cell,
-                    text="",
-                )
+            for cell in empty_row.cells[1:]:
+                merged = merged.merge(cell)
+
+            cls._set_cell_text(
+                cell=merged,
+                text=(
+                    "Non renseigné dans le modèle BPMN — "
+                    "à compléter par le métier."
+                ),
+                alignment=WD_ALIGN_PARAGRAPH.LEFT,
+            )
 
             return
 
@@ -903,7 +1166,7 @@ class ProcedureDocumentGenerator:
         )
 
         run.font.name = "Arial"
-        run.font.size = Pt(9)
+        run.font.size = Pt(8.5)
         run.bold = bold
         run.italic = italic
 
@@ -925,13 +1188,26 @@ class ProcedureDocumentGenerator:
         """Set balanced widths for the four operation columns."""
 
         widths = [
-            Cm(4.0),
-            Cm(1.4),
+            Cm(5.0),
+            Cm(1.2),
             Cm(9.8),
-            Cm(3.2),
+            Cm(2.4),
         ]
 
         table.autofit = False
+
+        grid = table._tbl.tblGrid
+        grid_columns = list(grid.gridCol_lst)
+
+        for grid_column, width in zip(
+            grid_columns,
+            widths,
+            strict=False,
+        ):
+            grid_column.set(
+                qn("w:w"),
+                str(int(width.twips)),
+            )
 
         for row in table.rows:
             for cell, width in zip(
@@ -940,6 +1216,9 @@ class ProcedureDocumentGenerator:
                 strict=False,
             ):
                 cell.width = width
+                cell_width = cell._tc.get_or_add_tcPr().get_or_add_tcW()
+                cell_width.set(qn("w:w"), str(int(width.twips)))
+                cell_width.set(qn("w:type"), "dxa")
 
     @staticmethod
     def _repeat_table_header(
@@ -994,6 +1273,9 @@ class ProcedureDocumentGenerator:
         updated_text = original_text
 
         for source, destination in replacements.items():
+            if destination in updated_text:
+                continue
+
             updated_text = updated_text.replace(
                 source,
                 destination,

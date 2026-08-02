@@ -102,6 +102,7 @@ class OperationContextBuilder:
                 label=branch.label,
                 condition=branch.condition,
                 is_default=branch.is_default,
+                is_loop_back=branch.is_loop_back,
                 target_element_id=branch.target_element_id,
                 target_name=(
                     operations_by_id[

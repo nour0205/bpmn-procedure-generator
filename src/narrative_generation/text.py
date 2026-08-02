@@ -97,8 +97,34 @@ def normalize_text(text: str) -> str:
     return " ".join(normalized.split())
 
 
+def normalize_business_french(text: str) -> str:
+    """Apply conservative display-language corrections to generated prose."""
+
+    value = " ".join(str(text).split()).strip()
+    value = re.sub(
+        r"\bmodèle\s+pré[-\s]?définis\b",
+        "modèle prédéfini",
+        value,
+        flags=re.IGNORECASE,
+    )
+    value = re.sub(
+        r"\bpré[-\s]?défini(e?s?|s)?\b",
+        lambda match: "prédéfini" + (match.group(1) or ""),
+        value,
+        flags=re.IGNORECASE,
+    )
+    value = re.sub(
+        r"\bpdts\b",
+        "produits",
+        value,
+        flags=re.IGNORECASE,
+    )
+    value = re.sub(r"\s+([,.;:!?])", r"\1", value)
+    return value
+
+
 def clean_sentence(text: str) -> str:
-    sentence = " ".join(str(text).split()).strip()
+    sentence = normalize_business_french(text)
 
     if not sentence:
         raise ValueError("A factual sentence cannot be empty.")

@@ -36,6 +36,7 @@ class ContextBranch(AgentBaseModel):
     label: str | None = None
     condition: str | None = None
     is_default: bool = False
+    is_loop_back: bool = False
     target_element_id: str
     target_name: str | None = None
 

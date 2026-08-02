@@ -28,6 +28,15 @@ def test_build_units_covers_every_operation_once() -> None:
     )
 
     assert len(units) == 7
+    assert [unit["unit_id"] for unit in units] == [
+        "block_1_decision",
+        "block_1_branch_1",
+        "block_2_decision",
+        "block_2_branch_1",
+        "block_2_branch_2",
+        "block_1_branch_2",
+        "block_3_convergence",
+    ]
     assert coverage["missing_operation_numbers"] == []
     assert coverage["duplicated_operation_numbers"] == []
     assert coverage["owned_operation_numbers"] == list(
@@ -90,8 +99,26 @@ def test_runner_writes_word_compatible_narrative(
         "placeholder_count",
         "max_paragraph_characters",
     }
-    assert (
-        "Dans le prolongement du scénario « Oui »"
-        in generated["paragraphs"][3]
+    nested_paragraph_index = next(
+        index
+        for index, paragraph in enumerate(
+            generated["paragraphs"]
+        )
+        if "Dans le prolongement du scénario « Oui »"
+        in paragraph
     )
+    parent_non_index = next(
+        index
+        for index, paragraph in enumerate(
+            generated["paragraphs"]
+        )
+        if (
+            paragraph.startswith(
+                "Dans le scénario « Non »"
+            )
+            and "reporting" in paragraph
+        )
+    )
+
+    assert nested_paragraph_index < parent_non_index
     assert generated["quality_summary"]["placeholder_count"] == 0

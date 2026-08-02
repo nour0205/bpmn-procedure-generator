@@ -208,6 +208,12 @@ def _normalize_branches(
                         False,
                     )
                 ),
+                "is_loop_back": bool(
+                    branch.get(
+                        "is_loop_back",
+                        False,
+                    )
+                ),
                 "target_element_id": str(
                     branch["target_element_id"]
                 ),

@@ -5,6 +5,12 @@ from __future__ import annotations
 
 from procedure.models import ProcedureModel
 
+from .text_normalization import (
+    normalize_branch_label,
+    normalize_french_business_text,
+    symbolic_delay_labels,
+)
+
 from .loader import GeneratedProcedure
 from .models import (
     DocumentActor,
@@ -125,10 +131,23 @@ class DocumentBundleBuilder:
             generation_missing_note_count=generated.missing_note_count,
         )
 
+        first_operation_name = (
+            operations[0].raw_name
+            if operations
+            else generated.title
+        )
+        last_operation_name = (
+            operations[-1].raw_name
+            if operations
+            else generated.title
+        )
+
         procedure_data = ProcedureDocumentData(
             purpose=(
-                f"Cette procédure décrit les opérations du processus "
-                f"« {generated.title} »."
+                "Cette procédure décrit le déroulement du processus "
+                f"« {generated.title} », depuis « {first_operation_name} » "
+                f"jusqu’à « {last_operation_name} ». Elle précise les "
+                "responsabilités, les décisions et les règles associées."
             ),
             operations=operations,
             documents=documents,
@@ -281,6 +300,7 @@ class DocumentBundleBuilder:
                         branch.label,
                         branch.condition,
                         branch.is_default,
+                        branch.is_loop_back,
                         branch.target_element_id,
                     )
                     for branch in mirror.branches
@@ -291,6 +311,7 @@ class DocumentBundleBuilder:
                         branch.label,
                         branch.condition,
                         branch.is_default,
+                        branch.is_loop_back,
                         branch.target_element_id,
                     )
                     for branch in source.branches
@@ -477,7 +498,9 @@ class DocumentBundleBuilder:
             notes = [
                 DocumentNote(
                     id=note.id,
-                    text=note.text,
+                    text=normalize_french_business_text(
+                        note.text
+                    ),
                     incorporated_in_description=(
                         note.id in incorporated_note_ids
                     ),
@@ -500,13 +523,29 @@ class DocumentBundleBuilder:
             branches = [
                 DocumentBranch(
                     gateway_id=branch.gateway_id,
-                    gateway_name=branch.gateway_name,
-                    label=branch.label,
-                    condition=branch.condition,
+                    gateway_name=(
+                        normalize_french_business_text(
+                            branch.gateway_name
+                        )
+                        or None
+                    ),
+                    label=normalize_branch_label(branch.label),
+                    condition=(
+                        normalize_french_business_text(
+                            branch.condition
+                        )
+                        or None
+                    ),
                     is_default=branch.is_default,
+                    is_loop_back=branch.is_loop_back,
                     target_operation_id=branch.target_element_id,
-                    target_operation_name=operation_name_by_id.get(
-                        branch.target_element_id
+                    target_operation_name=(
+                        normalize_french_business_text(
+                            operation_name_by_id.get(
+                                branch.target_element_id
+                            )
+                        )
+                        or None
                     ),
                 )
                 for branch in source.branches
@@ -516,18 +555,14 @@ class DocumentBundleBuilder:
                 DocumentOperation(
                     number=source.number,
                     bpmn_element_id=source.bpmn_element_id,
-                    raw_name=source.raw_name,
-                    description=generated.description,
-                    actor_id=(
-                        None
-                        if source.source_type == "serviceTask"
-                        else source.actor_id
+                    raw_name=normalize_french_business_text(
+                        source.raw_name
                     ),
-                    actor_name=(
-                        None
-                        if source.source_type == "serviceTask"
-                        else source.actor_name
+                    description=normalize_french_business_text(
+                        generated.description
                     ),
+                    actor_id=source.actor_id,
+                    actor_name=source.actor_name,
                     element_kind=DocumentOperationKind(
                         source.element_kind.value
                     ),
@@ -563,12 +598,9 @@ class DocumentBundleBuilder:
     ) -> str:
         """Clean BPMN annotation text without changing its meaning."""
 
-        normalized = " ".join(
-            text.replace(
-                "\n",
-                " ",
-            ).split()
-        ).strip()
+        normalized = normalize_french_business_text(
+            text.replace("\n", " ")
+        )
 
         normalized = normalized.rstrip(
             " ,.;:"
@@ -640,19 +672,16 @@ class DocumentBundleBuilder:
         unresolved: list[str] = []
 
         for operation in operations:
-            if operation.requires_validation:
+            for delay_label in symbolic_delay_labels(
+                operation.raw_name
+            ):
                 unresolved.append(
-                    (
-                        f"Opération {operation.number} "
-                        f"« {operation.raw_name} » : "
-                        + (
-                            "; ".join(operation.warnings)
-                            if operation.warnings
-                            else "validation manuelle requise"
-                        )
-                    )
+                    f"Opération {operation.number} « {operation.raw_name} » : "
+                    f"la valeur du délai {delay_label} est à confirmer "
+                    "par le métier."
                 )
 
-        unresolved.extend(validation.generation_warnings)
-
-        return unresolved
+        # Technical generation warnings remain available in the bundle's
+        # validation section. They must not be exposed as business questions
+        # in the procedure or specification documents.
+        return list(dict.fromkeys(unresolved))

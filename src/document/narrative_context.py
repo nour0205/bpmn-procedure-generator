@@ -9,6 +9,10 @@ from .narrative_models import (
     NarrativeContext,
     NarrativeOperation,
 )
+from .text_normalization import (
+    normalize_branch_label,
+    normalize_french_business_text,
+)
 
 
 class NarrativeContextBuilder:
@@ -111,10 +115,14 @@ class NarrativeContextBuilder:
         ):
             metadata_title = None
 
-        process_title = self._first_non_empty(
-            process_title_override,
-            metadata_title,
-            default_process_title,
+        process_title = normalize_french_business_text(
+            str(
+                self._first_non_empty(
+                    process_title_override,
+                    metadata_title,
+                    default_process_title,
+                )
+            )
         )
 
         numbered_operations = self._assign_numbers(
@@ -197,13 +205,15 @@ class NarrativeContextBuilder:
     ) -> NarrativeOperation:
         """Convert one raw operation context."""
 
-        raw_name = str(
-            self._get_first(
-                raw_operation,
-                self.NAME_KEYS,
-                default=f"Opération {number}",
+        raw_name = normalize_french_business_text(
+            str(
+                self._get_first(
+                    raw_operation,
+                    self.NAME_KEYS,
+                    default=f"Opération {number}",
+                )
             )
-        ).strip()
+        )
 
         actor = self._clean_optional_text(
             self._get_first(
@@ -296,6 +306,11 @@ class NarrativeContextBuilder:
             )
         )
 
+        if description:
+            description = normalize_french_business_text(
+                description
+            )
+
         # Generated descriptions are not authoritative for events.
         if execution_mode == "event":
             description = None
@@ -305,19 +320,25 @@ class NarrativeContextBuilder:
         if execution_mode == "subprocess":
             description = None
 
-        business_rules = self._extract_text_list(
-            raw_operation.get(
-                "business_rules",
-                [],
+        business_rules = [
+            normalize_french_business_text(item)
+            for item in self._extract_text_list(
+                raw_operation.get(
+                    "business_rules",
+                    [],
+                )
             )
-        )
+        ]
 
-        notes = self._extract_text_list(
-            raw_operation.get(
-                "notes",
-                [],
+        notes = [
+            normalize_french_business_text(item)
+            for item in self._extract_text_list(
+                raw_operation.get(
+                    "notes",
+                    [],
+                )
             )
-        )
+        ]
 
         input_documents = self._extract_document_names(
             self._get_first(
@@ -434,22 +455,35 @@ class NarrativeContextBuilder:
                 raw_branch.get("condition")
             )
 
-            label = self._first_non_empty(
-                raw_branch.get("label"),
-                condition,
-                "Branche non libellée",
+            if condition:
+                condition = normalize_french_business_text(
+                    condition
+                )
+
+            label = normalize_branch_label(
+                str(
+                    self._first_non_empty(
+                        raw_branch.get("label"),
+                        condition,
+                        "Branche non libellée",
+                    )
+                )
             )
 
             branches.append(
                 NarrativeBranch(
                     gateway_name=(
-                        self._clean_optional_text(
-                            raw_branch.get(
-                                "gateway_name"
+                        normalize_french_business_text(
+                            self._clean_optional_text(
+                                raw_branch.get(
+                                    "gateway_name"
+                                )
                             )
+                            or ""
                         )
+                        or None
                     ),
-                    label=str(label),
+                    label=label,
                     condition=condition,
                     is_default=bool(
                         raw_branch.get(
@@ -465,16 +499,23 @@ class NarrativeContextBuilder:
                         )
                         else None
                     ),
-                    target_operation_name=str(
-                        target_name
+                    target_operation_name=(
+                        normalize_french_business_text(
+                            str(target_name)
+                        )
                     ),
                     is_loop_back=bool(
-                        isinstance(
-                            target_number,
-                            int,
+                        raw_branch.get(
+                            "is_loop_back",
+                            (
+                                isinstance(
+                                    target_number,
+                                    int,
+                                )
+                                and target_number
+                                <= current_operation_number
+                            ),
                         )
-                        and target_number
-                        <= current_operation_number
                     ),
                 )
             )
