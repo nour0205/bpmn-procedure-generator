@@ -152,9 +152,14 @@ def validate_generated_unit(
     unit: dict,
     generated: GeneratedUnit,
 ) -> list[str]:
+    rewritable_facts = [
+        fact
+        for fact in unit["facts"]
+        if not fact["locked"]
+    ]
     expected_ids = [
         fact["fact_id"]
-        for fact in unit["facts"]
+        for fact in rewritable_facts
     ]
     received_ids = [
         item.fact_id
@@ -167,13 +172,20 @@ def validate_generated_unit(
             f"expected={expected_ids}; received={received_ids}."
         )
 
+    generated_by_id = {
+        item.fact_id: item
+        for item in generated.sentences
+    }
     result: list[str] = []
 
-    for fact, item in zip(
-        unit["facts"],
-        generated.sentences,
-        strict=True,
-    ):
+    for fact in unit["facts"]:
+        if fact["locked"]:
+            # Structural facts belong to deterministic Python logic.
+            # Never trust the model to reproduce them byte-for-byte.
+            result.append(clean_sentence(fact["text"]))
+            continue
+
+        item = generated_by_id[fact["fact_id"]]
         validate_rewritten_fact(
             fact,
             item.sentence,

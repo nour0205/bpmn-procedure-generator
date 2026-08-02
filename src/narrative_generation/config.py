@@ -11,7 +11,7 @@ class NarrativeGenerationConfig:
     """Runtime configuration shared by local tests and Kaggle inference."""
 
     model_name: str = "Qwen/Qwen3-8B"
-    prompt_version: str = "independent-narrative-v1.2"
+    prompt_version: str = "independent-narrative-v1.3"
     max_attempts_per_unit: int = 3
     max_new_tokens_per_unit: int = 650
     use_model: bool = True

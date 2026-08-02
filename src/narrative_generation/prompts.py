@@ -10,13 +10,14 @@ SYSTEM_PROMPT = (
     "Python a déjà analysé le graphe et construit des faits fiables dans "
     "leur ordre exact. Tu ne reconstruis jamais le processus.\n\n"
     "MISSION\n\n"
-    "Pour chaque fait :\n"
-    "- si locked=true, recopie exactement la phrase fournie ;\n"
-    "- si locked=false, reformule-la en français professionnel sans "
-    "supprimer ni ajouter d'information ;\n"
+    "Python injecte directement les faits structurels verrouillés. "
+    "Les faits présents dans la requête sont uniquement ceux que tu "
+    "dois reformuler.\n\n"
+    "Pour chaque fait fourni :\n"
+    "- reformule-le en français professionnel sans supprimer ni "
+    "ajouter d'information ;\n"
     "- corrige uniquement les fautes d’orthographe, d’accord et de "
     "ponctuation ;\n"
-    "- développe les abréviations évidentes comme « pdts » en « produits » ;\n"
     "- transforme les fragments issus des notes en phrases complètes "
     "et naturelles.\n\n"
     "RÈGLES ABSOLUES\n\n"
@@ -44,6 +45,17 @@ def build_unit_prompt(
     unit: dict,
     validation_error: str | None,
 ) -> str:
+    rewritable_facts = [
+        fact
+        for fact in unit["facts"]
+        if not fact["locked"]
+    ]
+
+    if not rewritable_facts:
+        raise ValueError(
+            f"{unit['unit_id']} contains no rewritable facts."
+        )
+
     payload = {
         "process_title": process_title,
         "unit_type": unit["unit_type"],
@@ -51,13 +63,12 @@ def build_unit_prompt(
         "facts": [
             {
                 "fact_id": fact["fact_id"],
-                "locked": fact["locked"],
                 "sentence_to_preserve_or_rewrite": fact["text"],
                 "source_information": fact["source_text"],
                 "actor_to_preserve": fact.get("actor"),
                 "execution_mode": fact.get("execution_mode"),
             }
-            for fact in unit["facts"]
+            for fact in rewritable_facts
         ],
     }
 
@@ -77,7 +88,7 @@ def build_unit_prompt(
                 "fact_id": fact["fact_id"],
                 "sentence": "Phrase finale.",
             }
-            for fact in unit["facts"]
+            for fact in rewritable_facts
         ]
     }
 

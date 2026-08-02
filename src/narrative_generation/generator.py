@@ -145,6 +145,22 @@ class NarrativeUnitGenerator:
         self,
         unit: dict,
     ) -> UnitGenerationResult:
+        if all(fact["locked"] for fact in unit["facts"]):
+            deterministic = self.deterministic_sentences(unit)
+
+            return UnitGenerationResult(
+                unit_id=unit["unit_id"],
+                sentences=deterministic,
+                paragraph=assemble_paragraph(
+                    unit,
+                    deterministic,
+                ),
+                attempts=0,
+                fallback_used=False,
+                cache_used=False,
+                last_error=None,
+            )
+
         cached = self._load_cache(unit)
 
         if cached is not None:
@@ -194,7 +210,12 @@ class NarrativeUnitGenerator:
                     ),
                     max_new_tokens=min(
                         self.config.max_new_tokens_per_unit,
-                        160 + 130 * len(unit["facts"]),
+                        160
+                        + 130
+                        * sum(
+                            not fact["locked"]
+                            for fact in unit["facts"]
+                        ),
                     ),
                 )
                 generated = GeneratedUnit.model_validate(

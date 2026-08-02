@@ -5,11 +5,13 @@ from pathlib import Path
 
 from narrative_generation.config import NarrativeGenerationConfig
 from narrative_generation.inputs import load_and_merge_inputs
+from narrative_generation.models import GeneratedUnit
 from narrative_generation.runner import run_narrative_generation
 from narrative_generation.units import (
     build_narrative_units,
     resolved_structural_operation_numbers,
 )
+from narrative_generation.validation import validate_generated_unit
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -99,6 +101,7 @@ def test_runner_writes_word_compatible_narrative(
         "placeholder_count",
         "max_paragraph_characters",
     }
+
     nested_paragraph_index = next(
         index
         for index, paragraph in enumerate(
@@ -122,3 +125,58 @@ def test_runner_writes_word_compatible_narrative(
 
     assert nested_paragraph_index < parent_non_index
     assert generated["quality_summary"]["placeholder_count"] == 0
+
+
+def test_locked_facts_are_injected_deterministically() -> None:
+    unit = {
+        "unit_id": "mixed_unit",
+        "facts": [
+            {
+                "fact_id": "op_1",
+                "locked": False,
+                "kind": "operation",
+                "text": "Phrase source.",
+                "source_text": "Phrase source.",
+                "required_tokens": [],
+                "timer_labels": [],
+                "actor": None,
+                "execution_mode": None,
+                "allow_purpose_clause": False,
+            },
+            {
+                "fact_id": "decision_rule",
+                "locked": True,
+                "kind": "decision",
+                "text": (
+                    "La décision « Validation ? » distingue des "
+                    "scénarios alternatifs : « Oui », « Non »."
+                ),
+                "source_text": "Validation Oui Non",
+                "required_tokens": [],
+                "timer_labels": [],
+                "actor": None,
+                "execution_mode": None,
+                "allow_purpose_clause": False,
+            },
+        ],
+    }
+    generated = GeneratedUnit.model_validate(
+        {
+            "sentences": [
+                {
+                    "fact_id": "op_1",
+                    "sentence": "Phrase reformulée.",
+                }
+            ]
+        }
+    )
+
+    result = validate_generated_unit(unit, generated)
+
+    assert result == [
+        "Phrase reformulée.",
+        (
+            "La décision « Validation? » distingue des "
+            "scénarios alternatifs: « Oui », « Non »."
+        ),
+    ]
