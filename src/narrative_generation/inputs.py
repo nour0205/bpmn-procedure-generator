@@ -8,7 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from narrative_generation.text import normalize_text
+from common.text_normalization import (
+    canonical_business_text,
+    normalize_french_business_text,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,7 +222,12 @@ def load_and_merge_inputs(
         if (
             plan_name
             and context_name
-            and normalize_text(plan_name) != normalize_text(context_name)
+            and canonical_business_text(
+                plan_name
+            )
+            != canonical_business_text(
+                context_name
+            )
         ):
             merge_warnings.append(
                 f"Different names for operation {number}: "
@@ -228,7 +236,11 @@ def load_and_merge_inputs(
 
         merged = copy.deepcopy(plan_operation)
         merged["number"] = number
-        merged["raw_name"] = plan_name or context_name
+        merged["raw_name"] = (
+            normalize_french_business_text(
+                plan_name or context_name
+            )
+        )
         merged["bpmn_element_id"] = context.get("bpmn_element_id")
         merged["element_kind"] = context.get("element_kind")
         merged["source_type"] = context.get("source_type")

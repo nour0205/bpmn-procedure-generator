@@ -1,8 +1,18 @@
-"""Conservative French text cleanup for generated business documents."""
+"""Document text-normalization compatibility module."""
 
 from __future__ import annotations
 
 import re
+
+from common.text_normalization import (
+    canonical_business_text,
+    normalize_french_business_text,
+)
+
+__all__ = [
+    "canonical_business_text",
+    "normalize_french_business_text",
+]
 
 
 _SYMBOLIC_DELAY = re.compile(
@@ -27,113 +37,6 @@ def normalize_branch_label(value: str | None) -> str | None:
         return "Non"
 
     return cleaned or None
-
-
-def normalize_french_business_text(value: str | None) -> str:
-    """Apply safe display corrections without changing BPMN meaning."""
-
-    if value is None:
-        return ""
-
-    text = str(value)
-    text = text.replace("\ufffe", "-").replace(
-        "\uffff",
-        "-",
-    )
-    text = text.replace("\u00ad", "")
-    text = " ".join(text.split()).strip()
-
-    text = re.sub(
-        r"\bpdts\b",
-        "produits",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    text = re.sub(
-        r"\bmodèle\s+pré[- ]définis?\b",
-        "modèle prédéfini",
-        text,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(
-        r"\bmodèle\s+pré[- ]définie\b",
-        "modèle prédéfini",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    text = re.sub(
-        r"\bDirection\s+Financi[èé]re\b",
-        "Direction Financière",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    text = re.sub(
-        r"\bcouverture de stock relatif\b",
-        "couverture de stock relative",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    text = re.sub(
-        r"\bDétermination des quantités "
-        r"par des articles\b",
-        "Détermination des quantités par article",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    text = re.sub(
-        r"\bLes prévisions de vente,\s*"
-        r"niveau de stock actuel\b",
-        "les prévisions de vente et "
-        "le niveau de stock actuel",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    text = re.sub(
-        (
-            r"\bDétermination des quantités "
-            r"par article par code besoin "
-            r"\(par poste\)\s*/\s*spécialité"
-            r",?\s*etc\.?"
-        ),
-        (
-            "Les quantités sont déterminées "
-            "par article, selon le code besoin "
-            "(par poste) ou la spécialité."
-        ),
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    text = re.sub(
-        r"\bhospitalier,\s*Officinal,\s*vaccin\b",
-        "hospitalier, officinal, vaccin",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    text = re.sub(
-        r"\s+([,.])",
-        r"\1",
-        text,
-    )
-    text = re.sub(
-        r"\s*([;:!?])",
-        r" \1",
-        text,
-    )
-    text = re.sub(
-        r"\s+",
-        " ",
-        text,
-    ).strip()
-
-    return text
 
 
 def symbolic_delay_labels(value: str | None) -> list[str]:

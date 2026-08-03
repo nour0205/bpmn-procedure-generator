@@ -13,7 +13,6 @@ from narrative_generation.units import (
 )
 from narrative_generation.validation import validate_generated_unit
 
-
 FIXTURES = Path(__file__).parent / "fixtures"
 PLAN_PATH = FIXTURES / "suivi_commandes_narrative_plan.json"
 CONTEXTS_PATH = FIXTURES / "suivi_commandes_operation_contexts.json"
@@ -46,6 +45,61 @@ def test_build_units_covers_every_operation_once() -> None:
     )
     assert coverage["referenced_operation_numbers"] == [7]
     assert warnings == []
+
+
+def test_display_correction_does_not_create_merge_warning(
+    tmp_path: Path,
+) -> None:
+    plan = {
+        "process_id": "process-1",
+        "process_title": "Processus",
+        "operations": [
+            {
+                "number": 7,
+                "raw_name": (
+                    "Génération automatique de la "
+                    "couverture de stock relative à "
+                    "chaque simulation (Autonomie)"
+                ),
+            }
+        ],
+        "decisions": [],
+        "writing_blocks": [],
+    }
+    contexts = {
+        "process_id": "process-1",
+        "operation_count": 1,
+        "contexts": [
+            {
+                "operation_number": 7,
+                "raw_name": (
+                    "Génération automatique de la "
+                    "couverture de stock relatif à "
+                    "chaque simulation (Autonomie)"
+                ),
+                "source_type": "serviceTask",
+                "element_kind": "activity",
+            }
+        ],
+    }
+    plan_path = tmp_path / "narrative_plan.json"
+    context_path = tmp_path / "operation_contexts.json"
+
+    plan_path.write_text(
+        json.dumps(plan, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    context_path.write_text(
+        json.dumps(contexts, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    result = load_and_merge_inputs(
+        narrative_plan_path=plan_path,
+        operation_contexts_path=context_path,
+    )
+
+    assert result.merge_warnings == []
 
 
 def test_nested_decision_prefix_and_resolved_structures() -> None:
