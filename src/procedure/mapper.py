@@ -264,7 +264,8 @@ class ProcedureMapper:
                         node_id=node.id,
                     ),
                     parent_subprocess_id=node.parent_subprocess_id,
-                    order_ambiguous=len(previous_ids) > 1,
+                    # Multiple incoming paths are valid BPMN convergence.
+                    order_ambiguous=False,
                 )
             )
 

@@ -306,3 +306,27 @@ def test_validation_summary_is_forwarded(
 
     assert procedure.validation.is_valid is True
     assert procedure.validation.error_count == 0
+
+
+def test_convergence_does_not_create_order_ambiguity() -> None:
+    bpmn_path = (
+        Path(__file__).parents[1]
+        / "bpmn_files"
+        / "Détermination des besoins d'appro.bpmn"
+    )
+    bpmn_model = BpmnParser().parse_file(bpmn_path)
+    determination_procedure = ProcedureMapper().map_process(
+        model=bpmn_model,
+        process_id="Id_e6326128-4d51-4eee-b38c-c74471effa51",
+    )
+
+    operation = next(
+        item
+        for item in determination_procedure.operations
+        if item.raw_name.startswith(
+            "Lancer le calcul des besoins"
+        )
+    )
+
+    assert len(operation.previous_operation_ids) > 1
+    assert operation.order_ambiguous is False
