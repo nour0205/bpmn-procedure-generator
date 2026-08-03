@@ -30,13 +30,16 @@ def normalize_branch_label(value: str | None) -> str | None:
 
 
 def normalize_french_business_text(value: str | None) -> str:
-    """Apply only safe, evidence-preserving language corrections."""
+    """Apply safe display corrections without changing BPMN meaning."""
 
     if value is None:
         return ""
 
     text = str(value)
-    text = text.replace("\ufffe", "-").replace("\uffff", "-")
+    text = text.replace("\ufffe", "-").replace(
+        "\uffff",
+        "-",
+    )
     text = text.replace("\u00ad", "")
     text = " ".join(text.split()).strip()
 
@@ -46,6 +49,7 @@ def normalize_french_business_text(value: str | None) -> str:
         text,
         flags=re.IGNORECASE,
     )
+
     text = re.sub(
         r"\bmodèle\s+pré[- ]définis?\b",
         "modèle prédéfini",
@@ -59,11 +63,52 @@ def normalize_french_business_text(value: str | None) -> str:
         flags=re.IGNORECASE,
     )
 
-    # French typography: remove spaces before commas/full stops while keeping
-    # a normal space before double punctuation.
-    text = re.sub(r"\s+([,\.])", r"\1", text)
-    text = re.sub(r"\s*([;:!?])", r" \1", text)
-    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(
+        r"\bDirection\s+Financi[èé]re\b",
+        "Direction Financière",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    text = re.sub(
+        r"\bcouverture de stock relatif\b",
+        "couverture de stock relative",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    text = re.sub(
+        r"\bDétermination des quantités "
+        r"par des articles\b",
+        "Détermination des quantités par article",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    text = re.sub(
+        r"\bLes prévisions de vente,\s*"
+        r"niveau de stock actuel\b",
+        "les prévisions de vente et "
+        "le niveau de stock actuel",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    text = re.sub(
+        r"\s+([,.])",
+        r"\1",
+        text,
+    )
+    text = re.sub(
+        r"\s*([;:!?])",
+        r" \1",
+        text,
+    )
+    text = re.sub(
+        r"\s+",
+        " ",
+        text,
+    ).strip()
 
     return text
 

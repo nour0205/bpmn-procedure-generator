@@ -529,6 +529,65 @@ class ProcedureDocumentGenerator:
             f"Detected table headers: {detected_headers}"
         )
 
+    @staticmethod
+    def _build_branch_conditions(
+        operations: list[DocumentOperation],
+    ) -> dict[str, tuple[str, str]]:
+        """Return branch labels only for exclusive branch operations.
+
+        A shared continuation reached from several previous operations must not
+        be presented as belonging exclusively to one branch.
+        """
+
+        operations_by_id = {
+            operation.bpmn_element_id: operation
+            for operation in operations
+        }
+
+        candidates: dict[
+            str,
+            list[tuple[str, str]],
+        ] = {}
+
+        for source_operation in operations:
+            for branch in source_operation.branches:
+                if branch.is_loop_back:
+                    continue
+
+                target = operations_by_id.get(
+                    branch.target_operation_id
+                )
+
+                if target is None:
+                    continue
+
+                # Several previous operations indicate a common continuation.
+                # Do not attach one incoming branch label to that operation.
+                if len(
+                    set(target.previous_operation_ids)
+                ) > 1:
+                    continue
+
+                condition = (
+                    branch.gateway_name or "Décision",
+                    (
+                        branch.label
+                        or branch.condition
+                        or "Branche non libellée"
+                    ),
+                )
+
+                candidates.setdefault(
+                    branch.target_operation_id,
+                    [],
+                ).append(condition)
+
+        return {
+            target_id: conditions[0]
+            for target_id, conditions in candidates.items()
+            if len(conditions) == 1
+        }
+
     @classmethod
     def _populate_operations_table(
         cls,
@@ -552,19 +611,11 @@ class ProcedureDocumentGenerator:
             table.rows[0]
         )
 
-        branch_condition_by_target_id = {
-            branch.target_operation_id: (
-                branch.gateway_name or "Décision",
-                (
-                    branch.label
-                    or branch.condition
-                    or "Branche non libellée"
-                ),
+        branch_condition_by_target_id = (
+            cls._build_branch_conditions(
+                operations
             )
-            for operation in operations
-            for branch in operation.branches
-            if not branch.is_loop_back
-        }
+        )
 
         for operation in operations:
             row = table.add_row()

@@ -9,7 +9,7 @@ def test_build_document_bundle() -> None:
     )
 
     generated = load_generated_procedure(
-        "output/determination_besoins/llm/generated_procedure.json"
+        "output/determination_des_besoins/llm/generated_procedure.json"
     )
 
     bundle = DocumentBundleBuilder().build(
@@ -29,7 +29,7 @@ def test_bundle_preserves_document_semantics() -> None:
     )
 
     generated = load_generated_procedure(
-        "output/determination_besoins/llm/generated_procedure.json"
+        "output/determination_des_besoins/llm/generated_procedure.json"
     )
 
     bundle = DocumentBundleBuilder().build(
@@ -60,5 +60,10 @@ def test_bundle_preserves_document_semantics() -> None:
         if operation.number == 3
     )
 
-    assert operation_3.requires_validation is True
+    # Operation 3 is a valid common continuation reached from
+    # both branches of the exclusive decision. It must not be
+    # treated as an ambiguous ordering case.
+    assert operation_3.requires_validation is False
+    assert operation_3.warnings == []
+    assert operation_3.confidence >= 0.95
     assert operation_3.notes

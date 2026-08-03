@@ -431,7 +431,9 @@ class DocumentBundleBuilder:
         return [
             DocumentActor(
                 id=actor.id,
-                name=actor.name,
+                name=normalize_french_business_text(
+                    actor.name
+                ),
                 source_type=actor.source_type,
                 operation_ids=operation_ids_by_actor.get(
                     actor.id,
@@ -562,7 +564,12 @@ class DocumentBundleBuilder:
                         generated.description
                     ),
                     actor_id=source.actor_id,
-                    actor_name=source.actor_name,
+                    actor_name=(
+                        normalize_french_business_text(
+                            source.actor_name
+                        )
+                        or None
+                    ),
                     element_kind=DocumentOperationKind(
                         source.element_kind.value
                     ),
