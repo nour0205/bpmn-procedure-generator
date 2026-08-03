@@ -66,4 +66,5 @@ def test_bundle_preserves_document_semantics() -> None:
     assert operation_3.requires_validation is False
     assert operation_3.warnings == []
     assert operation_3.confidence >= 0.95
+    assert len(operation_3.previous_operation_ids) > 1
     assert operation_3.notes

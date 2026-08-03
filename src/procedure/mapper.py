@@ -11,15 +11,14 @@ from bpmn.enums import (
 )
 from bpmn.models import (
     BpmnModel,
-    DataObject,
     Event,
     FlowNode,
-    Gateway,
     SequenceFlow,
     SubProcess,
     Task,
 )
 
+from .control_flow import find_common_continuations
 from .models import (
     ProcedureActor,
     ProcedureBranch,
@@ -32,7 +31,6 @@ from .models import (
     ProcedureValidationSummary,
 )
 from .ordering import ProcedureOrderer
-
 
 BUSINESS_DOCUMENT_TYPES = {
     BpmnElementType.DATA_OBJECT,
@@ -100,7 +98,7 @@ class ProcedureMapper:
             ordered_ids=operation_ids,
         )
 
-        return ProcedureModel(
+        procedure = ProcedureModel(
             metadata=ProcedureMetadata(
                 process_id=process.id,
                 title=(
@@ -130,6 +128,35 @@ class ProcedureMapper:
                     }
                 ),
             ),
+        )
+
+        convergences = find_common_continuations(
+            procedure
+        )
+
+        if not convergences:
+            return procedure
+
+        return procedure.model_copy(
+            update={
+                "operations": [
+                    operation.model_copy(
+                        update={
+                            "is_common_continuation": (
+                                operation.bpmn_element_id
+                                in convergences
+                            ),
+                            "convergence_gateway_ids": list(
+                                convergences.get(
+                                    operation.bpmn_element_id,
+                                    [],
+                                )
+                            ),
+                        }
+                    )
+                    for operation in procedure.operations
+                ]
+            }
         )
 
     @staticmethod
@@ -226,6 +253,7 @@ class ProcedureMapper:
                     process_id=process_id,
                     actor_id=actor_id,
                     actor_name=actor_name,
+                    raw_actor_name=node.lane_name,
                     input_document_ids=list(
                         getattr(
                             node,
@@ -262,6 +290,7 @@ class ProcedureMapper:
                     branches=self._branches_after_operation(
                         model=model,
                         node_id=node.id,
+                        operation_ids=operation_id_set,
                     ),
                     parent_subprocess_id=node.parent_subprocess_id,
                     # Multiple incoming paths are valid BPMN convergence.
@@ -532,6 +561,7 @@ class ProcedureMapper:
     def _branches_after_operation(
         model: BpmnModel,
         node_id: str,
+        operation_ids: set[str],
     ) -> list[ProcedureBranch]:
         """Extract branches when an operation is followed by a gateway."""
 
@@ -583,23 +613,35 @@ class ProcedureMapper:
                 if flow is None:
                     continue
 
-                branches.append(
-                    ProcedureBranch(
-                        flow_id=flow.id,
-                        gateway_id=gateway.id,
-                        gateway_name=gateway.name,
-                        label=flow.name,
-                        condition=flow.condition_expression,
-                        is_default=flow.is_default,
-                        is_loop_back=(
-                            ProcedureMapper._path_exists(
-                                model=model,
-                                start_id=target_id,
-                                target_id=node_id,
-                            )
-                        ),
-                        target_element_id=target_id,
+                target_operation_ids = (
+                    [target_id]
+                    if target_id in operation_ids
+                    else ProcedureMapper._nearest_operations(
+                        model=model,
+                        start_id=target_id,
+                        operation_ids=operation_ids,
+                        direction="forward",
                     )
                 )
+
+                for target_operation_id in target_operation_ids:
+                    branches.append(
+                        ProcedureBranch(
+                            flow_id=flow.id,
+                            gateway_id=gateway.id,
+                            gateway_name=gateway.name,
+                            label=flow.name,
+                            condition=flow.condition_expression,
+                            is_default=flow.is_default,
+                            is_loop_back=(
+                                ProcedureMapper._path_exists(
+                                    model=model,
+                                    start_id=target_id,
+                                    target_id=node_id,
+                                )
+                            ),
+                            target_element_id=target_operation_id,
+                        )
+                    )
 
         return branches

@@ -78,6 +78,7 @@ class ProcedureOperation(ProcedureBaseModel):
     process_id: str
     actor_id: str | None = None
     actor_name: str | None = None
+    raw_actor_name: str | None = None
 
     input_document_ids: list[str] = Field(default_factory=list)
     output_document_ids: list[str] = Field(default_factory=list)
@@ -92,6 +93,10 @@ class ProcedureOperation(ProcedureBaseModel):
 
     parent_subprocess_id: str | None = None
     order_ambiguous: bool = False
+    is_common_continuation: bool = False
+    convergence_gateway_ids: list[str] = Field(
+        default_factory=list
+    )
 
 
 class ProcedureMetadata(ProcedureBaseModel):

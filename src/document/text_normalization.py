@@ -95,6 +95,29 @@ def normalize_french_business_text(value: str | None) -> str:
     )
 
     text = re.sub(
+        (
+            r"\bDétermination des quantités "
+            r"par article par code besoin "
+            r"\(par poste\)\s*/\s*spécialité"
+            r",?\s*etc\.?"
+        ),
+        (
+            "Les quantités sont déterminées "
+            "par article, selon le code besoin "
+            "(par poste) ou la spécialité."
+        ),
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    text = re.sub(
+        r"\bhospitalier,\s*Officinal,\s*vaccin\b",
+        "hospitalier, officinal, vaccin",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    text = re.sub(
         r"\s+([,.])",
         r"\1",
         text,

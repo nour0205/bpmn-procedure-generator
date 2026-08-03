@@ -5,12 +5,6 @@ from __future__ import annotations
 
 from procedure.models import ProcedureModel
 
-from .text_normalization import (
-    normalize_branch_label,
-    normalize_french_business_text,
-    symbolic_delay_labels,
-)
-
 from .loader import GeneratedProcedure
 from .models import (
     DocumentActor,
@@ -25,6 +19,11 @@ from .models import (
     DocumentValidationSummary,
     ProcedureDocumentData,
     SpecificationDocumentData,
+)
+from .text_normalization import (
+    normalize_branch_label,
+    normalize_french_business_text,
+    symbolic_delay_labels,
 )
 
 
@@ -114,7 +113,9 @@ class DocumentBundleBuilder:
 
         metadata = DocumentMetadata(
             process_id=procedure.metadata.process_id,
-            title=generated.title,
+            title=normalize_french_business_text(
+                generated.title
+            ),
             source_bpmn_path=procedure.metadata.source_path,
         )
 
@@ -132,20 +133,24 @@ class DocumentBundleBuilder:
         )
 
         first_operation_name = (
-            operations[0].raw_name
+            normalize_french_business_text(
+                operations[0].raw_name
+            )
             if operations
-            else generated.title
+            else metadata.title
         )
         last_operation_name = (
-            operations[-1].raw_name
+            normalize_french_business_text(
+                operations[-1].raw_name
+            )
             if operations
-            else generated.title
+            else metadata.title
         )
 
         procedure_data = ProcedureDocumentData(
             purpose=(
                 "Cette procédure décrit le déroulement du processus "
-                f"« {generated.title} », depuis « {first_operation_name} » "
+                f"« {metadata.title} », depuis « {first_operation_name} » "
                 f"jusqu’à « {last_operation_name} ». Elle précise les "
                 "responsabilités, les décisions et les règles associées."
             ),
@@ -450,7 +455,9 @@ class DocumentBundleBuilder:
         return [
             DocumentBusinessDocument(
                 id=document.id,
-                name=document.name,
+                name=normalize_french_business_text(
+                    document.name
+                ),
                 source_type=document.source_type,
                 produced_by_operation_ids=(
                     document.produced_by_operation_ids
@@ -511,13 +518,17 @@ class DocumentBundleBuilder:
             ]
 
             input_document_names = [
-                document_by_id[document_id].name
+                normalize_french_business_text(
+                    document_by_id[document_id].name
+                )
                 for document_id in source.input_document_ids
                 if document_id in document_by_id
             ]
 
             output_document_names = [
-                document_by_id[document_id].name
+                normalize_french_business_text(
+                    document_by_id[document_id].name
+                )
                 for document_id in source.output_document_ids
                 if document_id in document_by_id
             ]
@@ -531,7 +542,11 @@ class DocumentBundleBuilder:
                         )
                         or None
                     ),
-                    label=normalize_branch_label(branch.label),
+                    label=normalize_branch_label(
+                        normalize_french_business_text(
+                            branch.label
+                        )
+                    ),
                     condition=(
                         normalize_french_business_text(
                             branch.condition
@@ -557,9 +572,7 @@ class DocumentBundleBuilder:
                 DocumentOperation(
                     number=source.number,
                     bpmn_element_id=source.bpmn_element_id,
-                    raw_name=normalize_french_business_text(
-                        source.raw_name
-                    ),
+                    raw_name=source.raw_name,
                     description=normalize_french_business_text(
                         generated.description
                     ),
@@ -570,6 +583,7 @@ class DocumentBundleBuilder:
                         )
                         or None
                     ),
+                    raw_actor_name=source.raw_actor_name,
                     element_kind=DocumentOperationKind(
                         source.element_kind.value
                     ),
@@ -588,6 +602,12 @@ class DocumentBundleBuilder:
                     output_document_names=output_document_names,
                     notes=notes,
                     branches=branches,
+                    is_common_continuation=(
+                        source.is_common_continuation
+                    ),
+                    convergence_gateway_ids=list(
+                        source.convergence_gateway_ids
+                    ),
                     confidence=generated.confidence,
                     requires_validation=generated.requires_validation,
                     warnings=generated.warnings,
@@ -679,11 +699,15 @@ class DocumentBundleBuilder:
         unresolved: list[str] = []
 
         for operation in operations:
+            display_name = normalize_french_business_text(
+                operation.raw_name
+            )
+
             for delay_label in symbolic_delay_labels(
                 operation.raw_name
             ):
                 unresolved.append(
-                    f"Opération {operation.number} « {operation.raw_name} » : "
+                    f"Opération {operation.number} « {display_name} » : "
                     f"la valeur du délai {delay_label} est à confirmer "
                     "par le métier."
                 )

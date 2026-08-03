@@ -107,6 +107,8 @@ def test_validation_rejection_is_explicit_loop_back() -> None:
         == branches["non"].target_element_id
     )
     assert target.raw_name == "Générer les lettres de relance"
+    assert target.is_common_continuation is False
+    assert target.convergence_gateway_ids == []
 
 
 def test_nested_validation_is_written_before_sibling_non_branch() -> None:

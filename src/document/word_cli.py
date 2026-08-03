@@ -10,8 +10,8 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from document.bundle_builder import (
-    DocumentBundleBuildError,
     DocumentBundleBuilder,
+    DocumentBundleBuildError,
 )
 from document.loader import (
     GeneratedProcedureLoadError,
@@ -28,6 +28,9 @@ from document.procedure_generator import (
 from document.specification_generator import (
     SpecificationDocumentGenerator,
     SpecificationGenerationError,
+)
+from document.text_normalization import (
+    normalize_french_business_text,
 )
 from pipeline.service import PipelineError, ProcedureGenerationPipeline
 
@@ -91,9 +94,9 @@ def apply_narrative_process_title(
     Use the narrative process title consistently in both Word documents.
     """
 
-    process_title = str(
+    process_title = normalize_french_business_text(
         generated_narrative.process_title
-    ).strip()
+    )
 
     if not process_title:
         raise ValueError(

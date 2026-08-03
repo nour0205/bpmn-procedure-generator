@@ -376,12 +376,7 @@ class ProcedureDocumentGenerator:
     def _format_actor_name(
         actor_name: str | None,
     ) -> str:
-        value = " ".join(str(actor_name or "").split()).strip()
-
-        if value.startswith("Direction d'"):
-            return value.replace("Direction ", "Direction\n", 1)
-
-        return value
+        return " ".join(str(actor_name or "").split()).strip()
 
     @classmethod
     def _find_operations_table(
@@ -533,10 +528,11 @@ class ProcedureDocumentGenerator:
     def _build_branch_conditions(
         operations: list[DocumentOperation],
     ) -> dict[str, tuple[str, str]]:
-        """Return branch labels only for exclusive branch operations.
+        """Build labels for true branch-entry operations.
 
-        A shared continuation reached from several previous operations must not
-        be presented as belonging exclusively to one branch.
+        A branch label is rendered on the operation that starts that branch.
+        It is not rendered on an operation identified as the common
+        continuation of the same decision gateway.
         """
 
         operations_by_id = {
@@ -544,16 +540,13 @@ class ProcedureDocumentGenerator:
             for operation in operations
         }
 
-        candidates: dict[
+        conditions_by_target: dict[
             str,
             list[tuple[str, str]],
         ] = {}
 
         for source_operation in operations:
             for branch in source_operation.branches:
-                if branch.is_loop_back:
-                    continue
-
                 target = operations_by_id.get(
                     branch.target_operation_id
                 )
@@ -561,32 +554,55 @@ class ProcedureDocumentGenerator:
                 if target is None:
                     continue
 
-                # Several previous operations indicate a common continuation.
-                # Do not attach one incoming branch label to that operation.
-                if len(
-                    set(target.previous_operation_ids)
-                ) > 1:
+                # Loop-back branches are represented with the decision,
+                # not as the normal entry condition of the target operation.
+                if getattr(
+                    branch,
+                    "is_loop_back",
+                    False,
+                ):
+                    continue
+
+                # Do not attach one branch label to an operation where
+                # the branches of that same gateway converge.
+                if (
+                    target.is_common_continuation
+                    and branch.gateway_id
+                    in target.convergence_gateway_ids
+                ):
+                    continue
+
+                branch_label = (
+                    branch.label
+                    or branch.condition
+                )
+
+                if not branch_label:
                     continue
 
                 condition = (
                     branch.gateway_name or "Décision",
-                    (
-                        branch.label
-                        or branch.condition
-                        or "Branche non libellée"
-                    ),
+                    branch_label,
                 )
 
-                candidates.setdefault(
+                conditions_by_target.setdefault(
                     branch.target_operation_id,
                     [],
                 ).append(condition)
 
-        return {
-            target_id: conditions[0]
-            for target_id, conditions in candidates.items()
-            if len(conditions) == 1
-        }
+        result: dict[str, tuple[str, str]] = {}
+
+        for target_id, conditions in conditions_by_target.items():
+            unique_conditions = list(
+                dict.fromkeys(conditions)
+            )
+
+            # Several different conditions attached to one target would
+            # be misleading, so only render an unambiguous entry condition.
+            if len(unique_conditions) == 1:
+                result[target_id] = unique_conditions[0]
+
+        return result
 
     @classmethod
     def _populate_operations_table(
@@ -707,6 +723,35 @@ class ProcedureDocumentGenerator:
         cls._clear_cell(cell)
 
         description_paragraph = cell.paragraphs[0]
+
+        if operation.is_common_continuation:
+            cls._configure_paragraph(
+                description_paragraph,
+                alignment=WD_ALIGN_PARAGRAPH.LEFT,
+                space_after=Pt(1),
+            )
+            cls._add_run(
+                paragraph=description_paragraph,
+                text="Convergence",
+                bold=True,
+            )
+
+            convergence_paragraph = cell.add_paragraph()
+            cls._configure_paragraph(
+                convergence_paragraph,
+                alignment=WD_ALIGN_PARAGRAPH.LEFT,
+                space_after=Pt(3),
+            )
+            cls._add_run(
+                paragraph=convergence_paragraph,
+                text=(
+                    "Les différents scénarios se rejoignent "
+                    "avant cette opération."
+                ),
+                italic=True,
+            )
+
+            description_paragraph = cell.add_paragraph()
 
         if branch_condition is not None:
             gateway_name, branch_label = branch_condition

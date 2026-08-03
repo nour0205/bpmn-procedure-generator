@@ -4,7 +4,6 @@ from bpmn.parser import BpmnParser
 from procedure.mapper import ProcedureMapper
 from procedure.models import ProcedureElementKind
 
-
 PROCEDURE_BPMN = """<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions
     xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -330,3 +329,5 @@ def test_convergence_does_not_create_order_ambiguity() -> None:
 
     assert len(operation.previous_operation_ids) > 1
     assert operation.order_ambiguous is False
+    assert operation.is_common_continuation is True
+    assert operation.convergence_gateway_ids

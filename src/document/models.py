@@ -81,6 +81,7 @@ class DocumentOperation(DocumentBaseModel):
 
     actor_id: str | None = None
     actor_name: str | None = None
+    raw_actor_name: str | None = None
 
     element_kind: DocumentOperationKind
     source_type: str
@@ -95,6 +96,11 @@ class DocumentOperation(DocumentBaseModel):
 
     notes: list[DocumentNote] = Field(default_factory=list)
     branches: list[DocumentBranch] = Field(default_factory=list)
+
+    is_common_continuation: bool = False
+    convergence_gateway_ids: list[str] = Field(
+        default_factory=list
+    )
 
     confidence: float = Field(ge=0.0, le=1.0)
     requires_validation: bool = False
