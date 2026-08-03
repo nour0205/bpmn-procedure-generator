@@ -70,6 +70,16 @@ class DocumentBranch(DocumentBaseModel):
     target_operation_name: str | None = None
 
 
+class DocumentDirectConvergenceBranch(BaseModel):
+    """A branch that enters a common continuation directly."""
+
+    gateway_id: str
+    gateway_name: str | None = None
+    label: str | None = None
+    condition: str | None = None
+    is_default: bool = False
+
+
 class DocumentOperation(DocumentBaseModel):
     """One operation displayed in the procedure and specification."""
 
@@ -101,6 +111,9 @@ class DocumentOperation(DocumentBaseModel):
     convergence_gateway_ids: list[str] = Field(
         default_factory=list
     )
+    direct_convergence_branches: list[
+        DocumentDirectConvergenceBranch
+    ] = Field(default_factory=list)
 
     confidence: float = Field(ge=0.0, le=1.0)
     requires_validation: bool = False

@@ -7,7 +7,6 @@ from pipeline.service import ProcedureGenerationPipeline
 from procedure.mapper import ProcedureMapper
 from procedure.models import ProcedureModel
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -63,6 +62,40 @@ def test_determination_marks_only_the_shared_continuation() -> None:
     assert calculation.convergence_gateway_ids
     assert len(set(calculation.previous_operation_ids)) == 2
     assert calculation.order_ambiguous is False
+
+
+def test_direct_branch_to_common_continuation_is_preserved() -> None:
+    procedure = _real_procedure(
+        "bpmn_files/Détermination des besoins d'appro.bpmn"
+    )
+    operation = _operation_by_name(
+        procedure,
+        "Lancer le calcul des besoins (CBN) sur le SI",
+    )
+
+    labels = {
+        branch.label
+        for branch in operation.direct_convergence_branches
+    }
+
+    assert labels == {"Non"}
+
+
+def test_non_empty_branch_is_not_direct() -> None:
+    procedure = _real_procedure(
+        "bpmn_files/Détermination des besoins d'appro.bpmn"
+    )
+    operation = _operation_by_name(
+        procedure,
+        "Lancer le calcul des besoins (CBN) sur le SI",
+    )
+
+    labels = {
+        branch.label
+        for branch in operation.direct_convergence_branches
+    }
+
+    assert "Oui" not in labels
 
 
 def test_suivi_marks_receptions_but_not_the_validation_loop() -> None:

@@ -12,6 +12,7 @@ from .models import (
     DocumentBundle,
     DocumentBusinessDocument,
     DocumentBusinessRule,
+    DocumentDirectConvergenceBranch,
     DocumentMetadata,
     DocumentNote,
     DocumentOperation,
@@ -608,6 +609,33 @@ class DocumentBundleBuilder:
                     convergence_gateway_ids=list(
                         source.convergence_gateway_ids
                     ),
+                    direct_convergence_branches=[
+                        DocumentDirectConvergenceBranch(
+                            gateway_id=branch.gateway_id,
+                            gateway_name=(
+                                normalize_french_business_text(
+                                    branch.gateway_name
+                                )
+                                or None
+                            ),
+                            label=(
+                                normalize_french_business_text(
+                                    branch.label
+                                )
+                                or None
+                            ),
+                            condition=(
+                                normalize_french_business_text(
+                                    branch.condition
+                                )
+                                or None
+                            ),
+                            is_default=branch.is_default,
+                        )
+                        for branch in (
+                            source.direct_convergence_branches
+                        )
+                    ],
                     confidence=generated.confidence,
                     requires_validation=generated.requires_validation,
                     warnings=generated.warnings,

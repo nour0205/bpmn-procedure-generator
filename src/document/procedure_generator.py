@@ -751,6 +751,27 @@ class ProcedureDocumentGenerator:
                 italic=True,
             )
 
+            for branch in operation.direct_convergence_branches:
+                branch_label = (
+                    branch.label
+                    or branch.condition
+                    or "Branche non libellée"
+                )
+                branch_paragraph = cell.add_paragraph()
+                cls._configure_paragraph(
+                    branch_paragraph,
+                    alignment=WD_ALIGN_PARAGRAPH.LEFT,
+                    space_after=Pt(3),
+                )
+                cls._add_run(
+                    paragraph=branch_paragraph,
+                    text=(
+                        f"La branche « {branch_label} » "
+                        "accède directement à cette opération."
+                    ),
+                    italic=True,
+                )
+
             description_paragraph = cell.add_paragraph()
 
         if branch_condition is not None:

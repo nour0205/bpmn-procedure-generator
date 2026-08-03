@@ -18,7 +18,10 @@ from bpmn.models import (
     Task,
 )
 
-from .control_flow import find_common_continuations
+from .control_flow import (
+    attach_direct_convergence_branches,
+    find_common_continuations,
+)
 from .models import (
     ProcedureActor,
     ProcedureBranch,
@@ -134,30 +137,34 @@ class ProcedureMapper:
             procedure
         )
 
-        if not convergences:
-            return procedure
+        if convergences:
+            procedure = procedure.model_copy(
+                update={
+                    "operations": [
+                        operation.model_copy(
+                            update={
+                                "is_common_continuation": (
+                                    operation.bpmn_element_id
+                                    in convergences
+                                ),
+                                "convergence_gateway_ids": list(
+                                    convergences.get(
+                                        operation.bpmn_element_id,
+                                        [],
+                                    )
+                                ),
+                            }
+                        )
+                        for operation in procedure.operations
+                    ]
+                }
+            )
 
-        return procedure.model_copy(
-            update={
-                "operations": [
-                    operation.model_copy(
-                        update={
-                            "is_common_continuation": (
-                                operation.bpmn_element_id
-                                in convergences
-                            ),
-                            "convergence_gateway_ids": list(
-                                convergences.get(
-                                    operation.bpmn_element_id,
-                                    [],
-                                )
-                            ),
-                        }
-                    )
-                    for operation in procedure.operations
-                ]
-            }
+        attach_direct_convergence_branches(
+            procedure.operations
         )
+
+        return procedure
 
     @staticmethod
     def _map_actors(

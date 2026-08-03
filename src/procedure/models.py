@@ -66,6 +66,16 @@ class ProcedureBranch(ProcedureBaseModel):
     target_element_id: str
 
 
+class DirectConvergenceBranch(BaseModel):
+    """Branch that reaches a common continuation directly."""
+
+    gateway_id: str
+    gateway_name: str | None = None
+    label: str | None = None
+    condition: str | None = None
+    is_default: bool = False
+
+
 class ProcedureOperation(ProcedureBaseModel):
     """One numbered operation in the generated procedure."""
 
@@ -97,6 +107,9 @@ class ProcedureOperation(ProcedureBaseModel):
     convergence_gateway_ids: list[str] = Field(
         default_factory=list
     )
+    direct_convergence_branches: list[
+        DirectConvergenceBranch
+    ] = Field(default_factory=list)
 
 
 class ProcedureMetadata(ProcedureBaseModel):

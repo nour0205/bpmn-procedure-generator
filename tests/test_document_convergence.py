@@ -10,7 +10,6 @@ from document.procedure_generator import ProcedureDocumentGenerator
 from pipeline.service import ProcedureGenerationPipeline
 from procedure.models import ProcedureModel
 
-
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "templates/procedure_template.docx"
 
@@ -134,6 +133,40 @@ def test_determination_document_renders_structure_not_actor_specific_text(
     assert (
         "Les différents scénarios se rejoignent avant cette opération."
         in common_text
+    )
+
+
+def test_direct_branch_is_rendered_in_convergence_block(
+    tmp_path: Path,
+) -> None:
+    _, bundle = _bundle(
+        "bpmn_files/Détermination des besoins d'appro.bpmn"
+    )
+    operation = next(
+        item
+        for item in bundle.operations
+        if item.raw_name
+        == "Lancer le calcul des besoins (CBN) sur le SI"
+    )
+    output = tmp_path / "procedure.docx"
+
+    ProcedureDocumentGenerator().generate(
+        bundle=bundle,
+        template_path=TEMPLATE,
+        output_path=output,
+    )
+
+    text = _operation_rows(output)[operation.number]
+
+    assert "Convergence" in text
+    assert (
+        "La branche « Non » accède directement "
+        "à cette opération."
+        in text
+    )
+    assert (
+        "Article nouvellement introduit ? — Non"
+        not in text
     )
 
 

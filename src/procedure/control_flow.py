@@ -5,7 +5,12 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from dataclasses import dataclass
 
-from .models import ProcedureBranch, ProcedureModel
+from .models import (
+    DirectConvergenceBranch,
+    ProcedureBranch,
+    ProcedureModel,
+    ProcedureOperation,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,3 +202,51 @@ def find_common_continuations(
         target_id: list(dict.fromkeys(gateway_ids))
         for target_id, gateway_ids in gateway_ids_by_target.items()
     }
+
+
+def attach_direct_convergence_branches(
+    operations: list[ProcedureOperation],
+) -> None:
+    """Attach branches whose first operation is the convergence itself."""
+
+    operations_by_id = {
+        operation.bpmn_element_id: operation
+        for operation in operations
+    }
+
+    for source_operation in operations:
+        for branch in source_operation.branches:
+            if branch.is_loop_back:
+                continue
+
+            target = operations_by_id.get(
+                branch.target_element_id
+            )
+
+            if target is None:
+                continue
+
+            if not target.is_common_continuation:
+                continue
+
+            if (
+                branch.gateway_id
+                not in target.convergence_gateway_ids
+            ):
+                continue
+
+            direct_branch = DirectConvergenceBranch(
+                gateway_id=branch.gateway_id,
+                gateway_name=branch.gateway_name,
+                label=branch.label,
+                condition=branch.condition,
+                is_default=branch.is_default,
+            )
+
+            if (
+                direct_branch
+                not in target.direct_convergence_branches
+            ):
+                target.direct_convergence_branches.append(
+                    direct_branch
+                )
